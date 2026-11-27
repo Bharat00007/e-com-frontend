@@ -1,5 +1,29 @@
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000/api/v1';
+  import.meta.env.VITE_API_BASE_URL || 'https://e-com-backend-wheat.vercel.app/api/v1';
+
+const GUEST_CART_TOKEN_KEY = 'sniff_co_guest_cart_token';
+
+export function getGuestCartToken(): string {
+  if (typeof window === 'undefined') return '';
+  let token = localStorage.getItem(GUEST_CART_TOKEN_KEY);
+  if (!token) {
+    token = crypto.randomUUID();
+    localStorage.setItem(GUEST_CART_TOKEN_KEY, token);
+  }
+  return token;
+}
+
+export function setGuestCartToken(token: string): void {
+  if (typeof window !== 'undefined' && token) {
+    localStorage.setItem(GUEST_CART_TOKEN_KEY, token);
+  }
+}
+
+export function clearGuestCartToken(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(GUEST_CART_TOKEN_KEY);
+  }
+}
 
 export class ApiError extends Error {
   public readonly status: number;
@@ -26,12 +50,15 @@ export async function apiRequest<T>(
   const url = `${API_BASE_URL}${path}`;
   let response: Response;
   const adminToken = typeof window !== 'undefined' ? localStorage.getItem('sniff_co_admin_token') : null;
+  const guestCartToken = getGuestCartToken();
+
   try {
     response = await fetch(url, {
       ...options,
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        ...(guestCartToken ? { 'x-guest-cart-token': guestCartToken } : {}),
         ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
         ...(options.headers ?? {}),
       },
@@ -42,6 +69,12 @@ export async function apiRequest<T>(
       0,
       'NETWORK_ERROR'
     );
+  }
+
+  // Preserve server-assigned guest cart token if received
+  const serverGuestToken = response.headers.get('x-guest-cart-token');
+  if (serverGuestToken) {
+    setGuestCartToken(serverGuestToken);
   }
 
   const payload = (await response.json().catch(() => null)) as {

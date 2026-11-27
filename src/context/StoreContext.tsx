@@ -1,126 +1,186 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { CartItem, CartTotals, Product, PetCategory, ProductCategory } from '../types/store';
-import { ApiError } from '../services/apiClient';
+import React, {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import {
-    BackendCustomer,
-    authService,
-    cartService,
     productService,
+    cartService,
+    authService,
     wishlistService,
+    BackendCustomer,
 } from '../services/storeServices';
+import { ApiError, getGuestCartToken, clearGuestCartToken } from '../services/apiClient';
+import type {
+    Product,
+    ProductVariant,
+    CartItem,
+    CartTotals,
+    PetCategory,
+    ProductCategory,
+} from '../types/store';
 
-interface BackendProduct {
+export type { Product, ProductVariant, CartItem, CartTotals };
+
+export interface BackendProduct {
     id: string;
     slug: string;
     name: string;
     shortName: string;
-    kicker: string;
-    subtitle: string;
-    description: string;
-    petCategory: 'CATS' | 'DOGS' | 'BOTH';
-    badge?: string | null;
-    secondaryBadge?: string | null;
-    features: string[];
+    kicker?: string | null;
+    subtitle?: string | null;
+    description?: string | null;
+    petCategory?: string | null;
+    category?: { name: string; slug?: string } | null;
+    price: number;
+    originalPrice?: number | null;
     ratingAverage: number;
-    reviewCount: number;
-    subscriptionDiscountPercent: number;
-    category?: { slug: string };
-    images?: Array<{ url: string; isPrimary: boolean }>;
-    variants: Array<{
+    ratingCount: number;
+    images?: Array<{ id?: string; url: string; isPrimary?: boolean; sortOrder?: number }>;
+    features?: string[];
+    benefits?: string[];
+    ingredients?: string | null;
+    usageInstructions?: string | null;
+    variants?: Array<{
         id: string;
-        sku: string;
+        sku?: string;
         packSizeLabel: string;
         price: number;
         salePrice?: number | null;
-        pricePerUnit?: string | null;
-        stockQuantity: number;
         isAvailable: boolean;
-        isDefault: boolean;
+        stockQuantity: number;
+        isDefault?: boolean;
     }>;
+    isBestseller: boolean;
+    isFeatured: boolean;
+    badgeLabel?: string | null;
+    badge?: string | null;
+    secondaryBadge?: string | null;
+    subscriptionDiscountPercent: number;
 }
 
 interface BackendCartPayload {
-    id: string;
+    id: string | null;
     couponCode: string | null;
     items: Array<{
         id: string;
         variantId: string;
         quantity: number;
         isSubscription: boolean;
-        frequencyWeeks?: number | null;
+        frequencyWeeks?: number;
         variant: {
             id: string;
-            packSizeLabel: string;
+            label?: string;
+            packSizeLabel?: string;
             price: number;
             salePrice?: number | null;
             product: {
                 id: string;
                 name: string;
-                images?: Array<{ url: string }>;
+                images: Array<{ url: string }>;
             };
         };
     }>;
     totals: CartTotals;
 }
 
-function mapBackendProduct(p: BackendProduct): Product {
-    const defaultVariant = p.variants.find((v) => v.isDefault) ?? p.variants[0];
-    const petCat: PetCategory =
-        p.petCategory === 'CATS' ? 'cats' : p.petCategory === 'DOGS' ? 'dogs' : 'both';
-    const catSlug = (p.category?.slug ?? 'cat-litter') as ProductCategory;
-    const primaryImg = p.images?.find((i) => i.isPrimary)?.url ?? p.images?.[0]?.url ?? '';
+function mapBackendProduct(bp: BackendProduct): Product {
+    const primaryImg = bp.images?.find((img) => img.isPrimary)?.url;
+    const firstImg = bp.images?.[0]?.url;
+    const defaultVariant = bp.variants?.[0];
+    const unitLabel = defaultVariant?.packSizeLabel ?? 'Standard';
+
+    const petCategory: PetCategory =
+        bp.petCategory?.toLowerCase() === 'dogs'
+            ? 'dogs'
+            : bp.petCategory?.toLowerCase() === 'both'
+            ? 'both'
+            : 'cats';
+
+    const categorySlug =
+        bp.category?.slug ??
+        bp.category?.name?.toLowerCase().replace(/\s+/g, '-') ??
+        'cat-litter';
+    const category: ProductCategory = categorySlug.includes('groom')
+        ? 'grooming'
+        : categorySlug.includes('home')
+        ? 'home-care'
+        : 'cat-litter';
 
     return {
-        id: p.id,
-        slug: p.slug,
-        name: p.name,
-        shortName: p.shortName,
-        kicker: p.kicker,
-        subtitle: p.subtitle,
-        description: p.description,
-        petCategory: petCat,
-        category: catSlug,
-        price: defaultVariant ? (defaultVariant.salePrice ?? defaultVariant.price) : 0,
-        unitLabel: defaultVariant?.packSizeLabel ?? '',
+        id: bp.id,
+        slug: bp.slug,
+        name: bp.name,
+        shortName: bp.shortName,
+        kicker:
+            bp.kicker ??
+            (petCategory === 'cats' ? 'For Cats · Low-dust' : 'For Dogs · Natural'),
+        subtitle: bp.subtitle ?? (bp.description ? bp.description.slice(0, 100) : ''),
+        description: bp.description ?? '',
+        petCategory,
+        category,
+        price: defaultVariant?.price ?? bp.price,
+        originalPrice: bp.originalPrice ?? undefined,
+        unitLabel,
         defaultVariantId: defaultVariant?.id ?? '',
-        stockQuantity: defaultVariant?.stockQuantity ?? 0,
-        badge: p.badge ?? undefined,
-        secondaryBadge: p.secondaryBadge ?? undefined,
-        rating: p.ratingAverage,
-        reviewCount: p.reviewCount,
-        image: primaryImg,
-        gallery: p.images?.map((i) => i.url) ?? [],
-        features: p.features ?? [],
-        variants: p.variants.map((v) => ({
+        stockQuantity: defaultVariant?.stockQuantity ?? 100,
+        badge: bp.badge ?? bp.badgeLabel ?? (bp.isBestseller ? 'Bestseller' : undefined),
+        secondaryBadge: bp.secondaryBadge ?? 'Made in India',
+        rating: bp.ratingAverage,
+        reviewCount: bp.ratingCount,
+        image: primaryImg ?? firstImg ?? '/placeholder-product.png',
+        gallery: bp.images?.map((img) => img.url) ?? [],
+        images: bp.images?.map((img) => img.url) ?? [],
+        features:
+            Array.isArray(bp.features) && bp.features.length > 0
+                ? bp.features
+                : ['Natural Formula', 'Safe & Tested'],
+        keyBenefits: Array.isArray(bp.benefits) ? bp.benefits : [],
+        ingredients: bp.ingredients ?? '',
+        usageInstructions: bp.usageInstructions ?? '',
+        variants: (bp.variants ?? []).map((v) => ({
             id: v.id,
-            sku: v.sku,
+            sku: v.sku ?? `SKU-${v.id.slice(-6)}`,
             label: v.packSizeLabel,
-            price: v.salePrice ?? v.price,
-            pricePerUnit: v.pricePerUnit ?? undefined,
-            stockQuantity: v.stockQuantity,
+            price: v.price,
+            originalPrice: v.salePrice ? v.price : undefined,
             isAvailable: v.isAvailable,
+            stockQuantity: v.stockQuantity,
             isDefault: v.isDefault,
         })),
-        subscriptionDiscountPercent: p.subscriptionDiscountPercent,
+        isBestseller: bp.isBestseller,
+        isFeatured: bp.isFeatured,
+        subscriptionDiscountPercent: bp.subscriptionDiscountPercent,
     };
 }
 
 function mapBackendCartItems(payload: BackendCartPayload): CartItem[] {
-    return payload.items.map((item) => ({
-        id: item.id,
-        productId: item.variant.product.id,
-        variantId: item.variantId,
-        name: item.variant.product.name,
-        variantLabel: item.variant.packSizeLabel,
-        image: item.variant.product.images?.[0]?.url ?? '',
-        unitPrice: item.variant.salePrice ?? item.variant.price,
-        quantity: item.quantity,
-        isSubscription: item.isSubscription,
-        frequencyWeeks: item.frequencyWeeks ?? 4,
-    }));
+    if (!payload || !Array.isArray(payload.items)) return [];
+    return payload.items.map((item) => {
+        const v = item.variant;
+        const p = v.product;
+        const img = p.images?.[0]?.url ?? '/placeholder-product.png';
+        const unitPrice = v.salePrice ?? v.price;
+        return {
+            id: item.id,
+            productId: p.id,
+            variantId: item.variantId,
+            name: p.name,
+            variantLabel: v.packSizeLabel ?? v.label ?? '',
+            image: img,
+            unitPrice,
+            quantity: item.quantity,
+            isSubscription: item.isSubscription,
+            frequencyWeeks: item.frequencyWeeks,
+        };
+    });
 }
 
-interface StoreContextValue {
+export interface StoreContextValue {
     products: Product[];
     productsLoading: boolean;
     cart: CartItem[];
@@ -129,7 +189,7 @@ interface StoreContextValue {
     wishlist: string[];
     customer: BackendCustomer | null;
     authLoading: boolean;
-    setCustomer: (customer: BackendCustomer | null) => void;
+    setCustomer: (customer: BackendCustomer | null) => Promise<void>;
     logout: () => Promise<void>;
     refreshCart: () => Promise<void>;
     apiStatus: 'checking' | 'connected' | 'offline';
@@ -142,10 +202,10 @@ interface StoreContextValue {
     addToCart: (
         product: Product,
         options?: {
-            quantity?: number;
             variantId?: string;
             variantLabel?: string;
             unitPrice?: number;
+            quantity?: number;
             isSubscription?: boolean;
             frequencyWeeks?: number;
         }
@@ -154,7 +214,8 @@ interface StoreContextValue {
     removeFromCart: (itemId: string) => Promise<void>;
     toggleItemSubscription: (itemId: string) => Promise<void>;
     applyCouponCode: (code: string) => Promise<void>;
-    clearCart: () => void;
+    clearCart: () => Promise<void>;
+    isItemUpdating: (itemId: string) => boolean;
     toggleWishlist: (productId: string) => Promise<void>;
     addToWishlist: (productId: string) => Promise<void>;
     removeFromWishlist: (productId: string) => Promise<void>;
@@ -197,6 +258,7 @@ function computeOptimisticTotals(items: CartItem[]): CartTotals {
 }
 
 const GUEST_WISHLIST_KEY = 'sniff_co_guest_wishlist';
+const GUEST_CART_ITEMS_KEY = 'sniff_co_guest_cart_items';
 
 function getGuestWishlist(): string[] {
     try {
@@ -217,14 +279,41 @@ function saveGuestWishlist(ids: string[]) {
     }
 }
 
+function getStoredGuestCart(): CartItem[] {
+    try {
+        const raw = localStorage.getItem(GUEST_CART_ITEMS_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveStoredGuestCart(items: CartItem[]): void {
+    try {
+        localStorage.setItem(GUEST_CART_ITEMS_KEY, JSON.stringify(items));
+    } catch {
+        // Ignore quota error
+    }
+}
+
+function clearStoredGuestCart(): void {
+    try {
+        localStorage.removeItem(GUEST_CART_ITEMS_KEY);
+    } catch {
+        // Ignore quota error
+    }
+}
+
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [products, setProducts] = useState<Product[]>([]);
     const [productsLoading, setProductsLoading] = useState(true);
-    const [cart, setCart] = useState<CartItem[]>([]);
+    const [cart, setCart] = useState<CartItem[]>(() => getStoredGuestCart());
     const [couponCode, setCouponCode] = useState<string | null>(null);
-    const [cartTotals, setCartTotals] = useState<CartTotals>(EMPTY_TOTALS);
+    const [cartTotals, setCartTotals] = useState<CartTotals>(() => computeOptimisticTotals(getStoredGuestCart()));
     const [wishlist, setWishlist] = useState<string[]>(() => getGuestWishlist());
     const [customer, setCustomer] = useState<BackendCustomer | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -232,19 +321,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+    const [updatingItemIds, setUpdatingItemIds] = useState<Set<string>>(new Set());
+
+    // In-flight mutex to prevent duplicate Add to Cart triggers
+    const inFlightAddRef = useRef<Set<string>>(new Set());
+
+    const isItemUpdating = useCallback((itemId: string) => updatingItemIds.has(itemId), [updatingItemIds]);
 
     const syncCartPayload = useCallback((payload: BackendCartPayload) => {
-        setCart(mapBackendCartItems(payload));
+        const mappedItems = mapBackendCartItems(payload);
+        setCart(mappedItems);
         setCouponCode(payload.couponCode);
         setCartTotals(payload.totals);
-    }, []);
+        if (!customer) {
+            saveStoredGuestCart(mappedItems);
+        }
+    }, [customer]);
 
     const refreshCart = useCallback(async () => {
         try {
             const payload = (await cartService.getCart()) as BackendCartPayload;
             syncCartPayload(payload);
         } catch {
-            // Keep current state if cart fetch fails
+            // Keep current valid state if network fetch fails
         }
     }, [syncCartPayload]);
 
@@ -262,7 +361,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (err instanceof ApiError) {
                 if (err.code === 'NETWORK_ERROR' || err.status === 0) {
                     setApiErrorMessage(
-                        'Backend server is currently offline or unreachable on http://localhost:4000. Start the backend server to continue.'
+                        'Backend server is currently offline or unreachable. Please verify your connection.'
                     );
                 } else if (err.status === 503) {
                     setApiErrorMessage(
@@ -285,6 +384,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         await Promise.all([loadProducts(), refreshCart()]);
     }, [loadProducts, refreshCart]);
 
+    // Atomic guest-to-customer cart merge
+    const mergeGuestCartIntoCustomer = useCallback(async () => {
+        const guestToken = getGuestCartToken();
+        const storedGuestItems = getStoredGuestCart();
+        if (!guestToken && storedGuestItems.length === 0) return;
+
+        try {
+            const payload = (await cartService.merge({
+                guestToken: guestToken || undefined,
+                items: storedGuestItems.map((i) => ({
+                    variantId: i.variantId,
+                    quantity: i.quantity,
+                    isSubscription: i.isSubscription,
+                    frequencyWeeks: i.frequencyWeeks,
+                })),
+            })) as BackendCartPayload;
+
+            clearStoredGuestCart();
+            clearGuestCartToken();
+            syncCartPayload(payload);
+        } catch (err) {
+            console.error('Cart merge error:', err);
+            await refreshCart();
+        }
+    }, [syncCartPayload, refreshCart]);
+
     useEffect(() => {
         let active = true;
 
@@ -294,10 +419,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 if (active) {
                     setCustomer(session.customer);
                     if (session.authenticated && session.customer) {
-                        const guestItems = getGuestWishlist();
-                        if (guestItems.length > 0) {
+                        // Merge guest wishlist
+                        const guestWishlistItems = getGuestWishlist();
+                        if (guestWishlistItems.length > 0) {
                             try {
-                                await wishlistService.merge(guestItems);
+                                await wishlistService.merge(guestWishlistItems);
                                 localStorage.removeItem(GUEST_WISHLIST_KEY);
                             } catch {
                                 // Ignore merge error
@@ -307,6 +433,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                         if (active && wl?.items) {
                             setWishlist(wl.items.map((i) => i.productId));
                         }
+
+                        // Merge guest cart
+                        await mergeGuestCartIntoCustomer();
                     } else {
                         setWishlist(getGuestWishlist());
                     }
@@ -326,18 +455,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return () => {
             active = false;
         };
-    }, [loadProducts, refreshCart]);
+    }, [loadProducts, refreshCart, mergeGuestCartIntoCustomer]);
 
     const handleSetCustomer = useCallback(async (newCustomer: BackendCustomer | null) => {
         setCustomer(newCustomer);
         if (newCustomer) {
-            const guestItems = getGuestWishlist();
-            if (guestItems.length > 0) {
+            // Merge guest wishlist
+            const guestWishlistItems = getGuestWishlist();
+            if (guestWishlistItems.length > 0) {
                 try {
-                    await wishlistService.merge(guestItems);
+                    await wishlistService.merge(guestWishlistItems);
                     localStorage.removeItem(GUEST_WISHLIST_KEY);
                 } catch {
-                    // Ignore merge error
+                    // Ignore error
                 }
             }
             try {
@@ -348,17 +478,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             } catch {
                 // Ignore error
             }
+
+            // Merge guest cart
+            await mergeGuestCartIntoCustomer();
+            await refreshCart();
         } else {
             setWishlist(getGuestWishlist());
         }
-    }, []);
+    }, [mergeGuestCartIntoCustomer, refreshCart]);
 
     // Background auto-reconnect polling when offline
     useEffect(() => {
         if (apiStatus !== 'offline') return;
+        const healthUrl = (import.meta.env.VITE_API_BASE_URL || 'https://e-com-backend-wheat.vercel.app/api/v1').replace(/\/api\/v1\/?$/, '/health');
         const timer = setInterval(async () => {
             try {
-                const res = await fetch('http://localhost:4000/api/health').catch(() => null);
+                const res = await fetch(healthUrl).catch(() => null);
                 if (res && res.ok) {
                     void Promise.all([loadProducts(), refreshCart()]);
                 }
@@ -376,6 +511,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Ignore error
         }
         setCustomer(null);
+        clearStoredGuestCart();
+        clearGuestCartToken();
+        setCart([]);
+        setCartTotals(EMPTY_TOTALS);
         setWishlist(getGuestWishlist());
         await refreshCart();
     }, [refreshCart]);
@@ -389,8 +528,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const quantity = options?.quantity ?? 1;
             const isSubscription = options?.isSubscription ?? false;
             const frequencyWeeks = options?.frequencyWeeks ?? 4;
-            const unitPrice =
-                options?.unitPrice ?? chosenVariant?.price ?? product.price;
+            const unitPrice = chosenVariant?.price ?? product.price;
+
+            // Enforce mutation lock to prevent duplicate Add to Cart calls from rapid clicks
+            const lockKey = `${variantId}:${isSubscription}`;
+            if (inFlightAddRef.current.has(lockKey)) {
+                return;
+            }
+            inFlightAddRef.current.add(lockKey);
 
             // Snapshot prior state for atomic rollback on network error
             const prevCart = cart;
@@ -422,10 +567,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 nextCart = [optimisticItem, ...cart];
             }
 
-            // Immediately update visible cart state & totals, and pop open the right-side drawer
+            // Immediately update visible cart state & totals, and open drawer
             setCart(nextCart);
             setCartTotals(computeOptimisticTotals(nextCart));
             setIsCartDrawerOpen(true);
+            if (!customer) {
+                saveStoredGuestCart(nextCart);
+            }
+
+            const idempotencyKey = `add-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
             try {
                 const payload = (await cartService.addItem({
@@ -433,15 +583,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     quantity,
                     isSubscription,
                     frequencyWeeks,
+                    idempotencyKey,
                 })) as BackendCartPayload;
                 syncCartPayload(payload);
             } catch (err) {
                 setCart(prevCart);
                 setCartTotals(prevTotals);
+                if (!customer) {
+                    saveStoredGuestCart(prevCart);
+                }
                 throw err;
+            } finally {
+                inFlightAddRef.current.delete(lockKey);
             }
         },
-        [cart, cartTotals, syncCartPayload]
+        [cart, cartTotals, customer, syncCartPayload]
     );
 
     const updateQuantity = useCallback(
@@ -450,58 +606,83 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (!existing) return;
             const nextQty = existing.quantity + delta;
 
+            if (nextQty <= 0) {
+                await removeFromCart(itemId);
+                return;
+            }
+
+            setUpdatingItemIds((prev) => new Set(prev).add(itemId));
             const prevCart = cart;
             const prevTotals = cartTotals;
 
-            let nextCart: CartItem[];
-            if (nextQty <= 0) {
-                nextCart = cart.filter((i) => i.id !== itemId);
-            } else {
-                nextCart = cart.map((i) => (i.id === itemId ? { ...i, quantity: nextQty } : i));
-            }
-
+            const nextCart = cart.map((i) => (i.id === itemId ? { ...i, quantity: nextQty } : i));
             setCart(nextCart);
             setCartTotals(computeOptimisticTotals(nextCart));
+            if (!customer) saveStoredGuestCart(nextCart);
+
+            const idToUpdate = existing.id.startsWith('opt-') ? existing.variantId : existing.id;
 
             try {
-                const payload = (await cartService.updateItem(itemId, {
+                const payload = (await cartService.updateItem(idToUpdate, {
                     quantity: nextQty,
                 })) as BackendCartPayload;
                 syncCartPayload(payload);
             } catch (err) {
                 setCart(prevCart);
                 setCartTotals(prevTotals);
+                if (!customer) saveStoredGuestCart(prevCart);
                 throw err;
+            } finally {
+                setUpdatingItemIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(itemId);
+                    return next;
+                });
             }
         },
-        [cart, cartTotals, syncCartPayload]
+        [cart, cartTotals, customer, syncCartPayload]
     );
 
     const removeFromCart = useCallback(
         async (itemId: string) => {
+            const existing = cart.find((i) => i.id === itemId);
+            if (!existing) return;
+
+            setUpdatingItemIds((prev) => new Set(prev).add(itemId));
             const prevCart = cart;
             const prevTotals = cartTotals;
 
             const nextCart = cart.filter((i) => i.id !== itemId);
             setCart(nextCart);
             setCartTotals(computeOptimisticTotals(nextCart));
+            if (!customer) saveStoredGuestCart(nextCart);
+
+            const idToDelete = existing.id.startsWith('opt-') ? existing.variantId : existing.id;
 
             try {
-                const payload = (await cartService.removeItem(itemId)) as BackendCartPayload;
+                const payload = (await cartService.removeItem(idToDelete)) as BackendCartPayload;
                 syncCartPayload(payload);
             } catch (err) {
                 setCart(prevCart);
                 setCartTotals(prevTotals);
+                if (!customer) saveStoredGuestCart(prevCart);
                 throw err;
+            } finally {
+                setUpdatingItemIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(itemId);
+                    return next;
+                });
             }
         },
-        [cart, cartTotals, syncCartPayload]
+        [cart, cartTotals, customer, syncCartPayload]
     );
 
     const toggleItemSubscription = useCallback(async (itemId: string) => {
         const existing = cart.find((i) => i.id === itemId);
         if (!existing) return;
-        const payload = (await cartService.updateItem(itemId, {
+        const idToUpdate = existing.id.startsWith('opt-') ? existing.variantId : existing.id;
+        const payload = (await cartService.updateItem(idToUpdate, {
             isSubscription: !existing.isSubscription,
         })) as BackendCartPayload;
         syncCartPayload(payload);
@@ -512,10 +693,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         syncCartPayload(payload);
     }, [syncCartPayload]);
 
-    const clearCart = useCallback(() => {
+    const clearCart = useCallback(async () => {
         setCart([]);
         setCouponCode(null);
         setCartTotals(EMPTY_TOTALS);
+        clearStoredGuestCart();
+        try {
+            await cartService.clearCart();
+        } catch {
+            // Ignore error on clear
+        }
     }, []);
 
     const isInWishlist = useCallback((productId: string) => wishlist.includes(productId), [wishlist]);
@@ -607,6 +794,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             toggleItemSubscription,
             applyCouponCode,
             clearCart,
+            isItemUpdating,
             toggleWishlist,
             addToWishlist,
             removeFromWishlist,
@@ -641,6 +829,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             toggleItemSubscription,
             applyCouponCode,
             clearCart,
+            isItemUpdating,
             toggleWishlist,
             addToWishlist,
             removeFromWishlist,

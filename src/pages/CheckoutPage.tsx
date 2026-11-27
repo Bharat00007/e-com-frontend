@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { checkoutService, paymentService } from '../services/storeServices';
+import {
+  checkoutService,
+  paymentService,
+  CheckoutQuoteResponse,
+} from '../services/storeServices';
 import { ApiError } from '../services/apiClient';
 
 export const CheckoutPage: React.FC = () => {
@@ -33,6 +37,11 @@ export const CheckoutPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Authoritative server quote state
+  const [quote, setQuote] = useState<CheckoutQuoteResponse | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState<boolean>(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!authLoading && !customer) {
       navigate('/login?redirect=/checkout', { replace: true });
@@ -62,11 +71,51 @@ export const CheckoutPage: React.FC = () => {
     }
   }, [customer, contactEmail, fullName, contactPhone]);
 
+  // Request authoritative server quote whenever checkout parameters change
+  useEffect(() => {
+    if (cart.length === 0) {
+      setQuote(null);
+      return;
+    }
+
+    let active = true;
+    setQuoteLoading(true);
+    setQuoteError(null);
+
+    checkoutService
+      .getQuote({
+        shippingMethod,
+        couponCode: activeCoupon ?? undefined,
+        pincode: pincode.trim().length === 6 ? pincode.trim() : undefined,
+      })
+      .then((data) => {
+        if (active) {
+          setQuote(data);
+          setQuoteError(null);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          // If quote endpoint is unreachable or requires auth, record message gracefully
+          setQuoteError(err instanceof ApiError ? err.message : 'Unable to retrieve server quote');
+        }
+      })
+      .finally(() => {
+        if (active) setQuoteLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [cart, shippingMethod, activeCoupon, pincode]);
+
   const expressFee = shippingMethod === 'express' ? 99 : cartTotals.shippingCharge;
-  const displayTotal = Math.max(
-    0,
-    cartTotals.subtotal - cartTotals.subscriptionDiscount - cartTotals.couponDiscount + expressFee
-  );
+  const serverSubtotal = quote?.totals ? quote.totals.subtotal : cartTotals.subtotal;
+  const serverSavings = quote?.totals ? quote.totals.totalSavings : cartTotals.totalSavings;
+  const serverShipping = quote?.totals ? quote.totals.shippingCharge : expressFee;
+  const serverTotal = quote?.totals
+    ? quote.totals.totalAmount
+    : Math.max(0, serverSubtotal - serverSavings + serverShipping);
 
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +123,11 @@ export const CheckoutPage: React.FC = () => {
 
     if (cart.length === 0) {
       setErrorMsg('Your cart is empty.');
+      return;
+    }
+
+    if (quote && !quote.isValid && quote.validationErrors.length > 0) {
+      setErrorMsg(quote.validationErrors.join(' '));
       return;
     }
 
@@ -487,36 +541,65 @@ export const CheckoutPage: React.FC = () => {
                 {couponError && <p className="text-xs text-error">{couponError}</p>}
               </div>
 
+              {quote?.validationErrors && quote.validationErrors.length > 0 && (
+                <div className="p-3 rounded-xl bg-error-container text-on-error-container text-body-sm flex flex-col gap-1">
+                  <div className="flex items-center gap-1 font-bold">
+                    <span className="material-symbols-outlined text-[18px]">error</span>
+                    <span>Order Validation Warning</span>
+                  </div>
+                  {quote.validationErrors.map((err, i) => (
+                    <p key={i}>{err}</p>
+                  ))}
+                </div>
+              )}
+
+              {quoteError && (
+                <div className="p-2.5 rounded-lg bg-surface-container-high text-on-surface-variant text-label-sm flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-secondary">info</span>
+                  <span>{quoteError}</span>
+                </div>
+              )}
+
               <div className="flex flex-col gap-space-xs text-body-md text-secondary">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>₹{cartTotals.subtotal.toLocaleString('en-IN')}</span>
+                  <span>₹{serverSubtotal.toLocaleString('en-IN')}</span>
                 </div>
-                {cartTotals.totalSavings > 0 && (
+                {serverSavings > 0 && (
                   <div className="flex justify-between text-primary font-medium">
                     <span>Discounts</span>
-                    <span>- ₹{cartTotals.totalSavings}</span>
+                    <span>- ₹{serverSavings}</span>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <span>Shipping</span>
-                  <span>{expressFee === 0 ? 'FREE' : `₹${expressFee}`}</span>
+                  <span>{serverShipping === 0 ? 'FREE' : `₹${serverShipping}`}</span>
                 </div>
-                <div className="flex justify-between pt-3 border-t border-surface-container text-on-surface font-bold text-title-md">
+                <div className="flex justify-between pt-3 border-t border-surface-container text-on-surface font-bold text-title-md items-center">
                   <span>Total Payable</span>
-                  <span>₹{displayTotal.toLocaleString('en-IN')}</span>
+                  <div className="flex items-center gap-2">
+                    {quoteLoading && (
+                      <span className="text-label-xs text-secondary italic">Calculating...</span>
+                    )}
+                    <span>₹{serverTotal.toLocaleString('en-IN')}</span>
+                  </div>
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={submitting || cart.length === 0}
+                disabled={
+                  submitting ||
+                  cart.length === 0 ||
+                  quoteLoading ||
+                  (quote !== null && !quote.isValid)
+                }
                 className="w-full bg-primary hover:bg-primary-container text-on-primary py-4 px-space-lg rounded-full text-title-sm flex items-center justify-center gap-space-sm transition-all shadow-md disabled:opacity-60"
               >
                 <span>
                   {submitting
                     ? 'Processing Order...'
-                    : `Place Order · ₹${displayTotal.toLocaleString('en-IN')}`}
+                    : `Place Order · ₹${serverTotal.toLocaleString('en-IN')}`}
                 </span>
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </button>

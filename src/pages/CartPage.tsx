@@ -17,6 +17,7 @@ export const CartPage: React.FC = () => {
     removeFromCart,
     toggleItemSubscription,
     applyCouponCode,
+    isItemUpdating,
   } = useStore();
   const navigate = useNavigate();
   const [couponInput, setCouponInput] = useState('');
@@ -263,8 +264,12 @@ export const CartPage: React.FC = () => {
                                 <button
                                   type="button"
                                   aria-label="Decrease quantity"
-                                  onClick={() => handleQtyChange(item.id, -1)}
-                                  className="w-6 h-6 rounded-full hover:bg-surface flex items-center justify-center text-on-surface text-sm font-bold transition-colors"
+                                  disabled={isItemUpdating(item.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQtyChange(item.id, -1);
+                                  }}
+                                  className="w-6 h-6 rounded-full hover:bg-surface flex items-center justify-center text-on-surface text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                   −
                                 </button>
@@ -274,8 +279,12 @@ export const CartPage: React.FC = () => {
                                 <button
                                   type="button"
                                   aria-label="Increase quantity"
-                                  onClick={() => handleQtyChange(item.id, 1)}
-                                  className="w-6 h-6 rounded-full hover:bg-surface flex items-center justify-center text-on-surface text-sm font-bold transition-colors"
+                                  disabled={isItemUpdating(item.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleQtyChange(item.id, 1);
+                                  }}
+                                  className="w-6 h-6 rounded-full hover:bg-surface flex items-center justify-center text-on-surface text-sm font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
                                   +
                                 </button>
@@ -283,8 +292,12 @@ export const CartPage: React.FC = () => {
 
                               <button
                                 type="button"
-                                onClick={() => removeFromCart(item.id)}
-                                className="text-body-sm text-error hover:opacity-80 flex items-center gap-1 transition-opacity"
+                                disabled={isItemUpdating(item.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeFromCart(item.id);
+                                }}
+                                className="text-body-sm text-error hover:opacity-80 flex items-center gap-1 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                               >
                                 <span className="material-symbols-outlined text-[16px]">
                                   delete_outline

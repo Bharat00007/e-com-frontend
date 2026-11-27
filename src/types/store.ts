@@ -39,6 +39,12 @@ export interface Product {
   features: string[];
   variants: ProductVariant[];
   subscriptionDiscountPercent?: number;
+  images?: string[];
+  keyBenefits?: string[];
+  ingredients?: string;
+  usageInstructions?: string;
+  isBestseller?: boolean;
+  isFeatured?: boolean;
 }
 
 export interface CartItem {

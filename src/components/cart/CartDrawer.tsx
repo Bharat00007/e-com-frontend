@@ -14,6 +14,7 @@ export const CartDrawer: React.FC = () => {
     setIsCartDrawerOpen,
     updateQuantity,
     removeFromCart,
+    isItemUpdating,
   } = useStore();
 
   const navigate = useNavigate();
@@ -169,8 +170,12 @@ export const CartDrawer: React.FC = () => {
                       <button
                         type="button"
                         aria-label={`Remove ${item.name} from cart`}
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-neutral-400 hover:text-red-500 transition-colors p-0.5"
+                        disabled={isItemUpdating(item.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFromCart(item.id);
+                        }}
+                        className="text-neutral-400 hover:text-red-500 transition-colors p-0.5 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -195,8 +200,12 @@ export const CartDrawer: React.FC = () => {
                         <button
                           type="button"
                           aria-label="Decrease quantity"
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="w-7 h-7 flex items-center justify-center text-neutral-600 hover:bg-neutral-200 transition-colors"
+                          disabled={isItemUpdating(item.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateQuantity(item.id, -1);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center text-neutral-600 hover:bg-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
@@ -206,8 +215,12 @@ export const CartDrawer: React.FC = () => {
                         <button
                           type="button"
                           aria-label="Increase quantity"
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="w-7 h-7 flex items-center justify-center text-neutral-600 hover:bg-neutral-200 transition-colors"
+                          disabled={isItemUpdating(item.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateQuantity(item.id, 1);
+                          }}
+                          className="w-7 h-7 flex items-center justify-center text-neutral-600 hover:bg-neutral-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>

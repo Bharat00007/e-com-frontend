@@ -1,3 +1,4 @@
 .env
 vercel.json
 .env.example
+node_modules/

@@ -78,6 +78,39 @@ export const categoryService = {
   getAll: () => apiRequest<unknown[]>('/categories'),
 };
 
+export interface CheckoutQuoteItem {
+  id: string;
+  variantId: string;
+  productId: string;
+  name: string;
+  packSizeLabel: string;
+  image: string | null;
+  unitPrice: number;
+  quantity: number;
+  lineTotal: number;
+  discountApplied: number;
+  isSubscription: boolean;
+  stockAvailable: number;
+  isOutOfStock: boolean;
+}
+
+export interface CheckoutQuoteResponse {
+  items: CheckoutQuoteItem[];
+  totals: {
+    subtotal: number;
+    subscriptionDiscount: number;
+    couponDiscount: number;
+    shippingCharge: number;
+    taxAmount: number;
+    totalAmount: number;
+    totalSavings: number;
+  };
+  couponCode: string | null;
+  shippingMethod: 'standard' | 'express';
+  isValid: boolean;
+  validationErrors: string[];
+}
+
 export const cartService = {
   getCart: () => apiRequest<unknown>('/cart'),
   addItem: (body: {
@@ -85,6 +118,7 @@ export const cartService = {
     quantity: number;
     isSubscription: boolean;
     frequencyWeeks?: number;
+    idempotencyKey?: string;
   }) =>
     apiRequest<unknown>('/cart/items', {
       method: 'POST',
@@ -97,6 +131,15 @@ export const cartService = {
     }),
   removeItem: (itemId: string) =>
     apiRequest<unknown>(`/cart/items/${itemId}`, { method: 'DELETE' }),
+  clearCart: () => apiRequest<unknown>('/cart', { method: 'DELETE' }),
+  merge: (body: {
+    guestToken?: string;
+    items?: Array<{ variantId: string; quantity: number; isSubscription?: boolean; frequencyWeeks?: number }>;
+  }) =>
+    apiRequest<unknown>('/cart/merge', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   applyCoupon: (code: string) =>
     apiRequest<unknown>('/cart/coupon', {
       method: 'POST',
@@ -105,6 +148,15 @@ export const cartService = {
 };
 
 export const checkoutService = {
+  getQuote: (body: {
+    shippingMethod?: 'standard' | 'express';
+    couponCode?: string;
+    pincode?: string;
+  }) =>
+    apiRequest<CheckoutQuoteResponse>('/checkout/quote', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   createOrder: (body: Record<string, unknown>) =>
     apiRequest<unknown>('/checkout/create-order', {
       method: 'POST',

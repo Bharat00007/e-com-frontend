@@ -364,7 +364,7 @@ export const LoginPage: React.FC = () => {
                     <div>
                       <p className="font-semibold text-xs uppercase tracking-wider text-[#c2410c]">Backend Offline</p>
                       <p className="text-xs text-[#9a3412] mt-0.5">
-                        {apiErrorMessage || 'Unable to connect to backend server on port 4000.'}
+                        {apiErrorMessage || 'Unable to connect to backend server.'}
                       </p>
                     </div>
                     <button
@@ -553,7 +553,7 @@ export const LoginPage: React.FC = () => {
                     <div>
                       <p className="font-semibold text-xs uppercase tracking-wider text-[#c2410c]">Backend Offline</p>
                       <p className="text-xs text-[#9a3412] mt-0.5">
-                        {apiErrorMessage || 'Unable to connect to backend server on port 4000.'}
+                        {apiErrorMessage || 'Unable to connect to backend server.'}
                       </p>
                     </div>
                     <button
