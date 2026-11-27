@@ -14,7 +14,7 @@ import {
     wishlistService,
     BackendCustomer,
 } from '../services/storeServices';
-import { ApiError, getGuestCartToken, clearGuestCartToken } from '../services/apiClient';
+import { ApiError, getGuestCartToken, clearGuestCartToken, API_BASE_URL } from '../services/apiClient';
 import type {
     Product,
     ProductVariant,
@@ -490,7 +490,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Background auto-reconnect polling when offline
     useEffect(() => {
         if (apiStatus !== 'offline') return;
-        const healthUrl = (import.meta.env.VITE_API_BASE_URL || 'https://e-com-backend-wheat.vercel.app/api/v1').replace(/\/api\/v1\/?$/, '/health');
+        const healthUrl = API_BASE_URL.replace(/\/api\/v1\/?$/, '/health');
         const timer = setInterval(async () => {
             try {
                 const res = await fetch(healthUrl).catch(() => null);

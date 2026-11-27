@@ -1,5 +1,15 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'https://e-com-backend-wheat.vercel.app/api/v1';
+function normalizeApiBaseUrl(rawUrl?: string): string {
+  const url = (rawUrl || 'https://e-com-backend-wheat.vercel.app').trim().replace(/\/+$/, '');
+  if (url.endsWith('/api/v1')) {
+    return url;
+  }
+  if (url.endsWith('/api')) {
+    return `${url}/v1`;
+  }
+  return `${url}/api/v1`;
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 const GUEST_CART_TOKEN_KEY = 'sniff_co_guest_cart_token';
 
