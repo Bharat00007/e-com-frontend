@@ -1,4 +1,12 @@
 function normalizeApiBaseUrl(rawUrl?: string): string {
+  // Use same-origin `/api/v1` proxy in local dev AND when deployed on Vercel (via vercel.json external rewrite)
+  // so HttpOnly session cookies work natively without third-party cookie rejection.
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.vercel.app')) {
+      return '/api/v1';
+    }
+  }
   const url = (rawUrl || 'https://e-com-backend-wheat.vercel.app').trim().replace(/\/+$/, '');
   if (url.endsWith('/api/v1')) {
     return url;
@@ -11,28 +19,34 @@ function normalizeApiBaseUrl(rawUrl?: string): string {
 
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
-const GUEST_CART_TOKEN_KEY = 'sniff_co_guest_cart_token';
+const DEFAULT_TIMEOUT_MS = 15000;
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-export function getGuestCartToken(): string {
-  if (typeof window === 'undefined') return '';
-  let token = localStorage.getItem(GUEST_CART_TOKEN_KEY);
-  if (!token) {
-    token = crypto.randomUUID();
-    localStorage.setItem(GUEST_CART_TOKEN_KEY, token);
+// Non-persistent in-memory CSRF token (never stored in localStorage)
+let inMemoryCsrfToken: string | null = null;
+let legacyCleaned = false;
+
+/** Clears deprecated unauthenticated/token keys from earlier client builds so stale caches cannot leak. */
+export function purgeLegacyClientAuthAndCartCaches(): void {
+  if (typeof window === 'undefined' || legacyCleaned) return;
+  legacyCleaned = true;
+  try {
+    localStorage.removeItem('sniff_co_customer_token');
+    localStorage.removeItem('sniff_co_guest_cart_token');
+    localStorage.removeItem('sniff_co_guest_cart_items');
+  } catch {
+    // Ignore storage access restriction
   }
-  return token;
 }
 
-export function setGuestCartToken(token: string): void {
-  if (typeof window !== 'undefined' && token) {
-    localStorage.setItem(GUEST_CART_TOKEN_KEY, token);
+export function setInMemoryCsrfToken(token: string | null): void {
+  if (token && typeof token === 'string') {
+    inMemoryCsrfToken = token;
   }
 }
 
-export function clearGuestCartToken(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem(GUEST_CART_TOKEN_KEY);
-  }
+export function resetInMemoryCsrfToken(): void {
+  inMemoryCsrfToken = null;
 }
 
 export class ApiError extends Error {
@@ -53,38 +67,142 @@ export class ApiError extends Error {
   }
 }
 
+function logApiDiagnostic(
+  method: string,
+  path: string,
+  status: number | string,
+  durationMs: number,
+  requestId?: string,
+  category?: string
+) {
+  if (import.meta.env.DEV) {
+    console.debug(
+      `[API] ${method} ${path} -> ${status} (${durationMs}ms)${requestId ? ` reqId=${requestId}` : ''}${
+        category ? ` [${category}]` : ''
+      }`
+    );
+  }
+}
+
+async function ensureCsrfToken(): Promise<string | null> {
+  if (inMemoryCsrfToken) return inMemoryCsrfToken;
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/csrf`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    const headerToken = res.headers.get('x-csrf-token');
+    if (headerToken) {
+      inMemoryCsrfToken = headerToken;
+      return inMemoryCsrfToken;
+    }
+    if (res.ok) {
+      const json = (await res.json().catch(() => null)) as {
+        data?: { csrfToken?: string };
+      } | null;
+      if (json?.data?.csrfToken) {
+        inMemoryCsrfToken = json.data.csrfToken;
+        return inMemoryCsrfToken;
+      }
+    }
+  } catch {
+    // Gracefully fall through cleanly
+  }
+  return inMemoryCsrfToken;
+}
+
+export interface ApiRequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
 export async function apiRequest<T>(
   path: string,
-  options: RequestInit = {}
+  options: ApiRequestOptions = {},
+  retries = 2
 ): Promise<T> {
+  purgeLegacyClientAuthAndCartCaches();
+
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: externalSignal, ...fetchOptions } = options;
   const url = `${API_BASE_URL}${path}`;
+  const method = (fetchOptions.method || 'GET').toUpperCase();
+  const isIdempotent = method === 'GET' || method === 'HEAD';
+  const isMutating = MUTATING_METHODS.has(method);
+
+  if (isMutating && !inMemoryCsrfToken && path !== '/auth/csrf') {
+    await ensureCsrfToken();
+  }
+
+  // Only send admin Bearer header for explicit `/admin` API calls; customer sessions rely strictly on HttpOnly cookies
+  const adminToken =
+    typeof window !== 'undefined' && path.startsWith('/admin')
+      ? localStorage.getItem('sniff_co_admin_token')
+      : null;
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+  const onExternalAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', onExternalAbort, { once: true });
+    }
+  }
+
+  const start = Date.now();
   let response: Response;
-  const adminToken = typeof window !== 'undefined' ? localStorage.getItem('sniff_co_admin_token') : null;
-  const guestCartToken = getGuestCartToken();
 
   try {
     response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
+      method,
       credentials: 'include',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
-        ...(guestCartToken ? { 'x-guest-cart-token': guestCartToken } : {}),
+        ...(inMemoryCsrfToken ? { 'x-csrf-token': inMemoryCsrfToken } : {}),
         ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
-        ...(options.headers ?? {}),
+        ...(fetchOptions.headers ?? {}),
       },
     });
-  } catch {
-    throw new ApiError(
-      'Unable to connect to the server. Please check your connection and try again.',
-      0,
-      'NETWORK_ERROR'
+  } catch (err) {
+    clearTimeout(timeoutHandle);
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
+
+    const isTimeoutOrAbort = err instanceof DOMException && err.name === 'AbortError';
+    const duration = Date.now() - start;
+    logApiDiagnostic(
+      method,
+      path,
+      isTimeoutOrAbort ? 'TIMEOUT' : 'CONNECTION_RESET',
+      duration,
+      undefined,
+      isTimeoutOrAbort ? 'TIMEOUT' : 'NETWORK_ERROR'
     );
+
+    if (retries > 0 && isIdempotent && !(externalSignal?.aborted)) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return apiRequest<T>(path, options, retries - 1);
+    }
+
+    throw new ApiError(
+      isTimeoutOrAbort
+        ? 'The request timed out while waiting for the server. Please retry.'
+        : 'Unable to connect to the server. Please check your connection and try again.',
+      0,
+      isTimeoutOrAbort ? 'TIMEOUT_ERROR' : 'NETWORK_ERROR'
+    );
+  } finally {
+    clearTimeout(timeoutHandle);
+    if (externalSignal) externalSignal.removeEventListener('abort', onExternalAbort);
   }
 
-  // Preserve server-assigned guest cart token if received
-  const serverGuestToken = response.headers.get('x-guest-cart-token');
-  if (serverGuestToken) {
-    setGuestCartToken(serverGuestToken);
+  const duration = Date.now() - start;
+  const reqId = response.headers.get('x-request-id') ?? undefined;
+
+  const headerCsrf = response.headers.get('x-csrf-token');
+  if (headerCsrf) {
+    setInMemoryCsrfToken(headerCsrf);
   }
 
   const payload = (await response.json().catch(() => null)) as {
@@ -93,14 +211,50 @@ export async function apiRequest<T>(
     error?: { code?: string; message?: string; details?: Record<string, string[]> };
   } | null;
 
+  if (payload?.data && typeof payload.data === 'object') {
+    const dataObj = payload.data as Record<string, unknown>;
+    if (typeof dataObj.csrfToken === 'string') {
+      setInMemoryCsrfToken(dataObj.csrfToken);
+    }
+  }
+
+  if (
+    response.status === 503 &&
+    payload?.error?.code === 'PROXY_RESET' &&
+    retries > 0 &&
+    isIdempotent
+  ) {
+    logApiDiagnostic(method, path, 503, duration, reqId, 'PROXY_RESET_RETRY');
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return apiRequest<T>(path, options, retries - 1);
+  }
+
   if (!response.ok || !payload?.success) {
+    const errorCode = payload?.error?.code ?? 'API_ERROR';
+    const category =
+      response.status >= 500
+        ? errorCode === 'DATABASE_UNAVAILABLE'
+          ? 'DATABASE_FAILURE'
+          : 'HTTP_5XX'
+        : response.status === 401 || response.status === 403
+          ? 'AUTH_OR_CSRF_ERROR'
+          : 'HTTP_4XX';
+
+    logApiDiagnostic(method, path, response.status, duration, reqId, category);
+
+    // Clear stale CSRF token if backend rejected it so next attempt refreshes cleanly
+    if (response.status === 403 && errorCode === 'CSRF_TOKEN_INVALID') {
+      resetInMemoryCsrfToken();
+    }
+
     throw new ApiError(
       payload?.error?.message ?? `Request failed (${response.status})`,
       response.status,
-      payload?.error?.code ?? 'API_ERROR',
+      errorCode,
       payload?.error?.details
     );
   }
 
+  logApiDiagnostic(method, path, response.status, duration, reqId);
   return payload.data as T;
 }

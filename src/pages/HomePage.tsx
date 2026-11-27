@@ -40,6 +40,7 @@ export const HomePage: React.FC = () => {
     const [selectedCats, setSelectedCats] = useState<string>('1');
     const [addedId, setAddedId] = useState<string | null>(null);
     const [bundleAdded, setBundleAdded] = useState(false);
+    const [cartActionError, setCartActionError] = useState<string | null>(null);
     const [newsletterInput, setNewsletterInput] = useState('');
     const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
 
@@ -50,16 +51,26 @@ export const HomePage: React.FC = () => {
     const handleQuickAdd = async (productId: string) => {
         const product = products.find((p) => p.id === productId);
         if (!product) return;
-        await addToCart(product);
-        setAddedId(productId);
-        setTimeout(() => setAddedId(null), 1500);
+        setCartActionError(null);
+        try {
+            await addToCart(product);
+            setAddedId(productId);
+            setTimeout(() => setAddedId(null), 1500);
+        } catch (err) {
+            setCartActionError(err instanceof Error ? err.message : 'Unable to add product to cart.');
+        }
     };
 
     const handleAddBundle = async () => {
-        if (bundleLitter) await addToCart(bundleLitter);
-        if (bundleShampoo) await addToCart(bundleShampoo);
-        setBundleAdded(true);
-        setTimeout(() => setBundleAdded(false), 1800);
+        setCartActionError(null);
+        try {
+            if (bundleLitter) await addToCart(bundleLitter);
+            if (bundleShampoo) await addToCart(bundleShampoo);
+            setBundleAdded(true);
+            setTimeout(() => setBundleAdded(false), 1800);
+        } catch (err) {
+            setCartActionError(err instanceof Error ? err.message : 'Unable to add bundle items to cart.');
+        }
     };
 
     return (
@@ -283,7 +294,23 @@ export const HomePage: React.FC = () => {
                         </Link>
                     </div>
 
-                    {productsLoading ? (
+                    {cartActionError && (
+                        <div
+                            className="mb-6 p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center justify-between gap-3"
+                            role="alert"
+                        >
+                            <span>{cartActionError}</span>
+                            <button
+                                type="button"
+                                onClick={() => setCartActionError(null)}
+                                className="text-xs font-semibold underline shrink-0"
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    )}
+
+                    {productsLoading && bestsellerCards.length === 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                             {[1, 2, 3, 4].map((n) => (
                                 <div key={n} className="border border-neutral-200 rounded-3xl p-5 h-96 animate-pulse bg-neutral-50" />

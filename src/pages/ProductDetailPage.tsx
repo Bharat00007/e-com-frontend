@@ -21,7 +21,7 @@ export const ProductDetailPage: React.FC = () => {
   const [bundleAdded, setBundleAdded] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  if (productsLoading) {
+  if (productsLoading && !product) {
     return (
       <div className="max-w-[1240px] mx-auto px-4 sm:px-6 py-16">
         <div className="h-96 bg-neutral-100 rounded-2xl animate-pulse" />

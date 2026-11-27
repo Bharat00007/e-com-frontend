@@ -14,7 +14,12 @@ import {
     wishlistService,
     BackendCustomer,
 } from '../services/storeServices';
-import { ApiError, getGuestCartToken, clearGuestCartToken, API_BASE_URL } from '../services/apiClient';
+import {
+    ApiError,
+    API_BASE_URL,
+    purgeLegacyClientAuthAndCartCaches,
+    resetInMemoryCsrfToken,
+} from '../services/apiClient';
 import type {
     Product,
     ProductVariant,
@@ -180,6 +185,14 @@ function mapBackendCartItems(payload: BackendCartPayload): CartItem[] {
     });
 }
 
+export type AuthStatus =
+    | 'initializing'
+    | 'unauthenticated'
+    | 'authenticating'
+    | 'authenticated'
+    | 'session_expired'
+    | 'error';
+
 export interface StoreContextValue {
     products: Product[];
     productsLoading: boolean;
@@ -188,10 +201,17 @@ export interface StoreContextValue {
     cartTotals: CartTotals;
     wishlist: string[];
     customer: BackendCustomer | null;
+    authStatus: AuthStatus;
     authLoading: boolean;
+    cartSyncError: string | null;
     setCustomer: (customer: BackendCustomer | null) => Promise<void>;
+    completeAuthenticatedLogin: (
+        customer: BackendCustomer,
+        options?: { alreadyMergedOnLogin?: boolean }
+    ) => Promise<{ sessionVerified: boolean; cartSyncError?: string }>;
     logout: () => Promise<void>;
     refreshCart: () => Promise<void>;
+    retryCartMerge: () => Promise<void>;
     apiStatus: 'checking' | 'connected' | 'offline';
     apiErrorMessage: string | null;
     retryConnection: () => Promise<void>;
@@ -258,7 +278,6 @@ function computeOptimisticTotals(items: CartItem[]): CartTotals {
 }
 
 const GUEST_WISHLIST_KEY = 'sniff_co_guest_wishlist';
-const GUEST_CART_ITEMS_KEY = 'sniff_co_guest_cart_items';
 
 function getGuestWishlist(): string[] {
     try {
@@ -279,44 +298,21 @@ function saveGuestWishlist(ids: string[]) {
     }
 }
 
-function getStoredGuestCart(): CartItem[] {
-    try {
-        const raw = localStorage.getItem(GUEST_CART_ITEMS_KEY);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-    } catch {
-        return [];
-    }
-}
-
-function saveStoredGuestCart(items: CartItem[]): void {
-    try {
-        localStorage.setItem(GUEST_CART_ITEMS_KEY, JSON.stringify(items));
-    } catch {
-        // Ignore quota error
-    }
-}
-
-function clearStoredGuestCart(): void {
-    try {
-        localStorage.removeItem(GUEST_CART_ITEMS_KEY);
-    } catch {
-        // Ignore quota error
-    }
-}
-
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    purgeLegacyClientAuthAndCartCaches();
+
     const [products, setProducts] = useState<Product[]>([]);
     const [productsLoading, setProductsLoading] = useState(true);
-    const [cart, setCart] = useState<CartItem[]>(() => getStoredGuestCart());
+    const [cart, setCart] = useState<CartItem[]>([]);
     const [couponCode, setCouponCode] = useState<string | null>(null);
-    const [cartTotals, setCartTotals] = useState<CartTotals>(() => computeOptimisticTotals(getStoredGuestCart()));
+    const [cartTotals, setCartTotals] = useState<CartTotals>(EMPTY_TOTALS);
     const [wishlist, setWishlist] = useState<string[]>(() => getGuestWishlist());
     const [customer, setCustomer] = useState<BackendCustomer | null>(null);
-    const [authLoading, setAuthLoading] = useState(true);
+    const [authStatus, setAuthStatus] = useState<AuthStatus>('initializing');
+    const [cartSyncError, setCartSyncError] = useState<string | null>(null);
+    const authLoading = authStatus === 'initializing';
     const [apiStatus, setApiStatus] = useState<'checking' | 'connected' | 'offline'>('checking');
     const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -326,52 +322,71 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // In-flight mutex to prevent duplicate Add to Cart triggers
     const inFlightAddRef = useRef<Set<string>>(new Set());
 
+    // Monotonic cart version counter — incremented on every mutation so background GET /cart
+    // responses never overwrite newer add/update/remove/merge state.
+    const cartVersionRef = useRef<number>(0);
+
     const isItemUpdating = useCallback((itemId: string) => updatingItemIds.has(itemId), [updatingItemIds]);
 
-    const syncCartPayload = useCallback((payload: BackendCartPayload) => {
+    const syncCartPayload = useCallback((payload: BackendCartPayload, isMutation = false) => {
+        if (!payload || !Array.isArray(payload.items)) return;
         const mappedItems = mapBackendCartItems(payload);
         setCart(mappedItems);
-        setCouponCode(payload.couponCode);
-        setCartTotals(payload.totals);
-        if (!customer) {
-            saveStoredGuestCart(mappedItems);
+        setCouponCode(payload.couponCode ?? null);
+        setCartTotals(payload.totals ?? EMPTY_TOTALS);
+        setCartSyncError(null);
+        if (isMutation) {
+            cartVersionRef.current += 1;
         }
-    }, [customer]);
+    }, []);
 
     const refreshCart = useCallback(async () => {
+        const versionAtStart = cartVersionRef.current;
         try {
             const payload = (await cartService.getCart()) as BackendCartPayload;
-            syncCartPayload(payload);
-        } catch {
-            // Keep current valid state if network fetch fails
+            if (cartVersionRef.current === versionAtStart) {
+                syncCartPayload(payload);
+            }
+        } catch (err) {
+            // Retain existing valid cart state; do not replace with empty cart on transient failure
+            if (err instanceof ApiError && err.status === 401) {
+                setAuthStatus('session_expired');
+            }
         }
     }, [syncCartPayload]);
 
-    const loadProducts = useCallback(async () => {
-        try {
+    const productsLoadedRef = useRef(false);
+
+    const loadProducts = useCallback(async (forceLoading = false) => {
+        if (forceLoading || !productsLoadedRef.current) {
             setProductsLoading(true);
+        }
+        try {
             const rawProducts = (await productService.getAll()) as BackendProduct[];
-            if (Array.isArray(rawProducts)) {
+            if (Array.isArray(rawProducts) && rawProducts.length > 0) {
                 setProducts(rawProducts.map(mapBackendProduct));
+                productsLoadedRef.current = true;
             }
             setApiStatus('connected');
             setApiErrorMessage(null);
         } catch (err) {
-            setApiStatus('offline');
-            if (err instanceof ApiError) {
-                if (err.code === 'NETWORK_ERROR' || err.status === 0) {
-                    setApiErrorMessage(
-                        'Backend server is currently offline or unreachable. Please verify your connection.'
-                    );
-                } else if (err.status === 503) {
-                    setApiErrorMessage(
-                        'PostgreSQL database is currently disconnected. Please verify your database connection.'
-                    );
+            if (!productsLoadedRef.current) {
+                setApiStatus('offline');
+                if (err instanceof ApiError) {
+                    if (err.code === 'NETWORK_ERROR' || err.status === 0) {
+                        setApiErrorMessage(
+                            'Backend server is currently offline or unreachable. Please verify your connection.'
+                        );
+                    } else if (err.status === 503) {
+                        setApiErrorMessage(
+                            'PostgreSQL database is currently disconnected. Please verify your database connection.'
+                        );
+                    } else {
+                        setApiErrorMessage(err.message || 'Unable to load products from backend API.');
+                    }
                 } else {
-                    setApiErrorMessage(err.message || 'Unable to load products from backend API.');
+                    setApiErrorMessage('Unable to connect to backend service.');
                 }
-            } else {
-                setApiErrorMessage('Unable to connect to backend service.');
             }
         } finally {
             setProductsLoading(false);
@@ -384,90 +399,124 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         await Promise.all([loadProducts(), refreshCart()]);
     }, [loadProducts, refreshCart]);
 
-    // Atomic guest-to-customer cart merge
-    const mergeGuestCartIntoCustomer = useCallback(async () => {
-        const guestToken = getGuestCartToken();
-        const storedGuestItems = getStoredGuestCart();
-        if (!guestToken && storedGuestItems.length === 0) return;
-
+    const retryCartMerge = useCallback(async () => {
         try {
-            const payload = (await cartService.merge({
-                guestToken: guestToken || undefined,
-                items: storedGuestItems.map((i) => ({
-                    variantId: i.variantId,
-                    quantity: i.quantity,
-                    isSubscription: i.isSubscription,
-                    frequencyWeeks: i.frequencyWeeks,
-                })),
-            })) as BackendCartPayload;
-
-            clearStoredGuestCart();
-            clearGuestCartToken();
-            syncCartPayload(payload);
+            setCartSyncError(null);
+            const payload = (await cartService.merge()) as BackendCartPayload;
+            syncCartPayload(payload, true);
         } catch (err) {
-            console.error('Cart merge error:', err);
-            await refreshCart();
+            setCartSyncError(
+                err instanceof ApiError
+                    ? err.message
+                    : 'Unable to synchronize cart with your account. Please retry.'
+            );
+            throw err;
         }
-    }, [syncCartPayload, refreshCart]);
+    }, [syncCartPayload]);
 
     useEffect(() => {
         let active = true;
 
-        const loadSession = async () => {
+        const initializeSessionAndCart = async () => {
             try {
                 const session = await authService.getSession();
-                if (active) {
-                    setCustomer(session.customer);
-                    if (session.authenticated && session.customer) {
-                        // Merge guest wishlist
-                        const guestWishlistItems = getGuestWishlist();
-                        if (guestWishlistItems.length > 0) {
-                            try {
-                                await wishlistService.merge(guestWishlistItems);
-                                localStorage.removeItem(GUEST_WISHLIST_KEY);
-                            } catch {
-                                // Ignore merge error
-                            }
-                        }
-                        const wl = (await wishlistService.get()) as { items?: Array<{ productId: string }> };
-                        if (active && wl?.items) {
-                            setWishlist(wl.items.map((i) => i.productId));
-                        }
+                if (!active) return;
 
-                        // Merge guest cart
-                        await mergeGuestCartIntoCustomer();
-                    } else {
-                        setWishlist(getGuestWishlist());
+                if (session.authenticated && session.customer) {
+                    setCustomer(session.customer);
+                    setAuthStatus('authenticated');
+
+                    // Synchronize guest wishlist if present, then load customer wishlist & cart
+                    const guestWishlistItems = getGuestWishlist();
+                    if (guestWishlistItems.length > 0) {
+                        try {
+                            await wishlistService.merge(guestWishlistItems);
+                            localStorage.removeItem(GUEST_WISHLIST_KEY);
+                        } catch {
+                            // Preserve session if wishlist merge fails transiently
+                        }
                     }
+
+                    await Promise.all([
+                        wishlistService
+                            .get()
+                            .then((wl) => {
+                                const parsed = wl as { items?: Array<{ productId: string }> };
+                                if (active && parsed?.items) {
+                                    setWishlist(parsed.items.map((i) => i.productId));
+                                }
+                            })
+                            .catch(() => undefined),
+                        refreshCart(),
+                    ]);
+                } else {
+                    setCustomer(null);
+                    setAuthStatus('unauthenticated');
+                    setWishlist(getGuestWishlist());
+                    // Only load guest cart AFTER /auth/session established isolated GuestSession cookie
+                    await refreshCart();
                 }
             } catch {
                 if (active) {
                     setCustomer(null);
+                    setAuthStatus('error');
                     setWishlist(getGuestWishlist());
                 }
-            } finally {
-                if (active) setAuthLoading(false);
             }
         };
 
-        void Promise.all([loadSession(), loadProducts(), refreshCart()]);
+        void Promise.all([initializeSessionAndCart(), loadProducts()]);
 
         return () => {
             active = false;
         };
-    }, [loadProducts, refreshCart, mergeGuestCartIntoCustomer]);
+    }, [loadProducts, refreshCart]);
 
-    const handleSetCustomer = useCallback(async (newCustomer: BackendCustomer | null) => {
-        setCustomer(newCustomer);
-        if (newCustomer) {
-            // Merge guest wishlist
+    const completeAuthenticatedLogin = useCallback(
+        async (
+            expectedCustomer: BackendCustomer,
+            options?: { alreadyMergedOnLogin?: boolean }
+        ): Promise<{ sessionVerified: boolean; cartSyncError?: string }> => {
+            setAuthStatus('authenticating');
+            setCartSyncError(null);
+
+            // 1. Verify that backend server session (HttpOnly cookie) is active & accepted by browser
+            let session: { authenticated: boolean; customer: BackendCustomer | null };
+            try {
+                session = await authService.getSession();
+            } catch (err) {
+                setAuthStatus('error');
+                throw new ApiError(
+                    err instanceof ApiError
+                        ? err.message
+                        : 'Unable to verify authentication session with server.',
+                    err instanceof ApiError ? err.status : 0,
+                    'SESSION_VERIFY_FAILED'
+                );
+            }
+
+            if (!session.authenticated || !session.customer || session.customer.id !== expectedCustomer.id) {
+                setCustomer(null);
+                setAuthStatus('unauthenticated');
+                throw new ApiError(
+                    'Login credentials matched, but your browser did not establish a valid session cookie. Please allow cookies and try again.',
+                    401,
+                    'SESSION_COOKIE_NOT_ACCEPTED'
+                );
+            }
+
+            // 2. Session verified: transition central authentication state to authenticated
+            setCustomer(session.customer);
+            setAuthStatus('authenticated');
+
+            // 3. Synchronize wishlist safely without jeopardizing auth session
             const guestWishlistItems = getGuestWishlist();
             if (guestWishlistItems.length > 0) {
                 try {
                     await wishlistService.merge(guestWishlistItems);
                     localStorage.removeItem(GUEST_WISHLIST_KEY);
                 } catch {
-                    // Ignore error
+                    // Non-fatal
                 }
             }
             try {
@@ -476,16 +525,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     setWishlist(wl.items.map((i) => i.productId));
                 }
             } catch {
-                // Ignore error
+                // Non-fatal
             }
 
-            // Merge guest cart
-            await mergeGuestCartIntoCustomer();
-            await refreshCart();
-        } else {
-            setWishlist(getGuestWishlist());
-        }
-    }, [mergeGuestCartIntoCustomer, refreshCart]);
+            // 4. Synchronize / retrieve final authoritative cart cleanly (never logs out on merge error)
+            let mergeErrMessage: string | undefined;
+            try {
+                if (options?.alreadyMergedOnLogin) {
+                    const payload = (await cartService.getCart()) as BackendCartPayload;
+                    syncCartPayload(payload, true);
+                } else {
+                    const payload = (await cartService.merge()) as BackendCartPayload;
+                    syncCartPayload(payload, true);
+                }
+            } catch (err) {
+                mergeErrMessage =
+                    err instanceof ApiError
+                        ? err.message
+                        : 'Signed in cleanly, though your previous guest cart could not be synced automatically.';
+                setCartSyncError(mergeErrMessage);
+                await refreshCart();
+            }
+
+            return { sessionVerified: true, cartSyncError: mergeErrMessage };
+        },
+        [syncCartPayload, refreshCart]
+    );
+
+    const handleSetCustomer = useCallback(
+        async (newCustomer: BackendCustomer | null) => {
+            if (!newCustomer) {
+                setCustomer(null);
+                setAuthStatus('unauthenticated');
+                setWishlist(getGuestWishlist());
+                return;
+            }
+            await completeAuthenticatedLogin(newCustomer);
+        },
+        [completeAuthenticatedLogin]
+    );
 
     // Background auto-reconnect polling when offline
     useEffect(() => {
@@ -500,7 +578,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             } catch {
                 // Next interval
             }
-        }, 3000);
+        }, 6000);
         return () => clearInterval(timer);
     }, [apiStatus, loadProducts, refreshCart]);
 
@@ -508,16 +586,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         try {
             await authService.logout();
         } catch {
-            // Ignore error
+            // Proceed to reset client session state even if network call fails
         }
+        resetInMemoryCsrfToken();
+        purgeLegacyClientAuthAndCartCaches();
         setCustomer(null);
-        clearStoredGuestCart();
-        clearGuestCartToken();
+        setAuthStatus('unauthenticated');
+        setCartSyncError(null);
+        cartVersionRef.current += 1;
         setCart([]);
+        setCouponCode(null);
         setCartTotals(EMPTY_TOTALS);
-        setWishlist(getGuestWishlist());
-        await refreshCart();
-    }, [refreshCart]);
+        try {
+            localStorage.removeItem(GUEST_WISHLIST_KEY);
+        } catch {
+            // Ignore storage error
+        }
+        setWishlist([]);
+        // Initialize a fresh isolated guest session after logout
+        await authService.getSession().catch(() => undefined);
+    }, []);
 
     const addToCart: StoreContextValue['addToCart'] = useCallback(
         async (product, options) => {
@@ -528,52 +616,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const quantity = options?.quantity ?? 1;
             const isSubscription = options?.isSubscription ?? false;
             const frequencyWeeks = options?.frequencyWeeks ?? 4;
-            const unitPrice = chosenVariant?.price ?? product.price;
-
             // Enforce mutation lock to prevent duplicate Add to Cart calls from rapid clicks
             const lockKey = `${variantId}:${isSubscription}`;
             if (inFlightAddRef.current.has(lockKey)) {
                 return;
             }
             inFlightAddRef.current.add(lockKey);
-
-            // Snapshot prior state for atomic rollback on network error
-            const prevCart = cart;
-            const prevTotals = cartTotals;
-
-            // Check if item already exists in cart
-            const existingIdx = cart.findIndex(
-                (i) => i.variantId === variantId && i.isSubscription === isSubscription
-            );
-
-            let nextCart: CartItem[];
-            if (existingIdx > -1) {
-                nextCart = cart.map((item, idx) =>
-                    idx === existingIdx ? { ...item, quantity: item.quantity + quantity } : item
-                );
-            } else {
-                const optimisticItem: CartItem = {
-                    id: `opt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                    productId: product.id,
-                    variantId,
-                    name: product.name,
-                    variantLabel: chosenVariant?.label ?? product.unitLabel ?? '',
-                    image: product.image,
-                    unitPrice,
-                    quantity,
-                    isSubscription,
-                    frequencyWeeks,
-                };
-                nextCart = [optimisticItem, ...cart];
-            }
-
-            // Immediately update visible cart state & totals, and open drawer
-            setCart(nextCart);
-            setCartTotals(computeOptimisticTotals(nextCart));
-            setIsCartDrawerOpen(true);
-            if (!customer) {
-                saveStoredGuestCart(nextCart);
-            }
 
             const idempotencyKey = `add-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -585,19 +633,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     frequencyWeeks,
                     idempotencyKey,
                 })) as BackendCartPayload;
-                syncCartPayload(payload);
-            } catch (err) {
-                setCart(prevCart);
-                setCartTotals(prevTotals);
-                if (!customer) {
-                    saveStoredGuestCart(prevCart);
-                }
-                throw err;
+                syncCartPayload(payload, true);
+                setIsCartDrawerOpen(true);
             } finally {
                 inFlightAddRef.current.delete(lockKey);
             }
         },
-        [cart, cartTotals, customer, syncCartPayload]
+        [syncCartPayload]
+    );
+
+    const removeFromCart = useCallback(
+        async (itemId: string) => {
+            const existing = cart.find((i) => i.id === itemId);
+            if (!existing) return;
+
+            setUpdatingItemIds((prev) => new Set(prev).add(itemId));
+            const prevCart = cart;
+            const prevTotals = cartTotals;
+
+            const nextCart = cart.filter((i) => i.id !== itemId);
+            setCart(nextCart);
+            setCartTotals(computeOptimisticTotals(nextCart));
+
+            const idToDelete = existing.id.startsWith('opt-') ? existing.variantId : existing.id;
+
+            try {
+                const payload = (await cartService.removeItem(idToDelete)) as BackendCartPayload;
+                syncCartPayload(payload, true);
+            } catch (err) {
+                setCart(prevCart);
+                setCartTotals(prevTotals);
+                throw err;
+            } finally {
+                setUpdatingItemIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(itemId);
+                    return next;
+                });
+            }
+        },
+        [cart, cartTotals, syncCartPayload]
     );
 
     const updateQuantity = useCallback(
@@ -618,7 +693,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const nextCart = cart.map((i) => (i.id === itemId ? { ...i, quantity: nextQty } : i));
             setCart(nextCart);
             setCartTotals(computeOptimisticTotals(nextCart));
-            if (!customer) saveStoredGuestCart(nextCart);
 
             const idToUpdate = existing.id.startsWith('opt-') ? existing.variantId : existing.id;
 
@@ -626,11 +700,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const payload = (await cartService.updateItem(idToUpdate, {
                     quantity: nextQty,
                 })) as BackendCartPayload;
-                syncCartPayload(payload);
+                syncCartPayload(payload, true);
             } catch (err) {
                 setCart(prevCart);
                 setCartTotals(prevTotals);
-                if (!customer) saveStoredGuestCart(prevCart);
                 throw err;
             } finally {
                 setUpdatingItemIds((prev) => {
@@ -640,42 +713,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 });
             }
         },
-        [cart, cartTotals, customer, syncCartPayload]
-    );
-
-    const removeFromCart = useCallback(
-        async (itemId: string) => {
-            const existing = cart.find((i) => i.id === itemId);
-            if (!existing) return;
-
-            setUpdatingItemIds((prev) => new Set(prev).add(itemId));
-            const prevCart = cart;
-            const prevTotals = cartTotals;
-
-            const nextCart = cart.filter((i) => i.id !== itemId);
-            setCart(nextCart);
-            setCartTotals(computeOptimisticTotals(nextCart));
-            if (!customer) saveStoredGuestCart(nextCart);
-
-            const idToDelete = existing.id.startsWith('opt-') ? existing.variantId : existing.id;
-
-            try {
-                const payload = (await cartService.removeItem(idToDelete)) as BackendCartPayload;
-                syncCartPayload(payload);
-            } catch (err) {
-                setCart(prevCart);
-                setCartTotals(prevTotals);
-                if (!customer) saveStoredGuestCart(prevCart);
-                throw err;
-            } finally {
-                setUpdatingItemIds((prev) => {
-                    const next = new Set(prev);
-                    next.delete(itemId);
-                    return next;
-                });
-            }
-        },
-        [cart, cartTotals, customer, syncCartPayload]
+        [cart, cartTotals, removeFromCart, syncCartPayload]
     );
 
     const toggleItemSubscription = useCallback(async (itemId: string) => {
@@ -685,19 +723,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const payload = (await cartService.updateItem(idToUpdate, {
             isSubscription: !existing.isSubscription,
         })) as BackendCartPayload;
-        syncCartPayload(payload);
+        syncCartPayload(payload, true);
     }, [cart, syncCartPayload]);
 
     const applyCouponCode = useCallback(async (code: string) => {
         const payload = (await cartService.applyCoupon(code)) as BackendCartPayload;
-        syncCartPayload(payload);
+        syncCartPayload(payload, true);
     }, [syncCartPayload]);
 
     const clearCart = useCallback(async () => {
+        cartVersionRef.current += 1;
         setCart([]);
         setCouponCode(null);
         setCartTotals(EMPTY_TOTALS);
-        clearStoredGuestCart();
         try {
             await cartService.clearCart();
         } catch {
@@ -777,10 +815,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             cartTotals,
             wishlist,
             customer,
+            authStatus,
             authLoading,
+            cartSyncError,
             setCustomer: handleSetCustomer,
+            completeAuthenticatedLogin,
             logout,
             refreshCart,
+            retryCartMerge,
             apiStatus,
             apiErrorMessage,
             retryConnection,
@@ -814,10 +856,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             cartTotals,
             wishlist,
             customer,
+            authStatus,
             authLoading,
+            cartSyncError,
             handleSetCustomer,
+            completeAuthenticatedLogin,
             logout,
             refreshCart,
+            retryCartMerge,
             apiStatus,
             apiErrorMessage,
             retryConnection,

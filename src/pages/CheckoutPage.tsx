@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import {
+  addressService,
   checkoutService,
   paymentService,
   CheckoutQuoteResponse,
@@ -16,6 +17,8 @@ export const CheckoutPage: React.FC = () => {
     applyCouponCode,
     customer,
     authLoading,
+    cartSyncError,
+    retryCartMerge,
     clearCart,
   } = useStore();
   const navigate = useNavigate();
@@ -41,6 +44,8 @@ export const CheckoutPage: React.FC = () => {
   const [quote, setQuote] = useState<CheckoutQuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState<boolean>(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
+  const quoteSeqRef = useRef(0);
+  const quoteAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!authLoading && !customer) {
@@ -71,43 +76,109 @@ export const CheckoutPage: React.FC = () => {
     }
   }, [customer, contactEmail, fullName, contactPhone]);
 
-  // Request authoritative server quote whenever checkout parameters change
   useEffect(() => {
-    if (cart.length === 0) {
-      setQuote(null);
-      return;
-    }
+    if (authLoading || !customer) return;
+    let cancelled = false;
 
-    let active = true;
-    setQuoteLoading(true);
-    setQuoteError(null);
-
-    checkoutService
-      .getQuote({
-        shippingMethod,
-        couponCode: activeCoupon ?? undefined,
-        pincode: pincode.trim().length === 6 ? pincode.trim() : undefined,
+    addressService
+      .list()
+      .then((rows) => {
+        if (cancelled || !Array.isArray(rows) || rows.length === 0) return;
+        const typed = rows as Array<{
+          isDefault?: boolean;
+          recipientName?: string;
+          phone?: string;
+          addressLine1?: string;
+          addressLine2?: string | null;
+          city?: string;
+          state?: string;
+          pincode?: string;
+        }>;
+        const chosen = typed.find((a) => a.isDefault) ?? typed[0];
+        if (!chosen) return;
+        setFullName((prev) => prev || chosen.recipientName || customer.fullName || '');
+        setContactPhone((prev) => prev || chosen.phone || customer.phone || '');
+        setAddress1((prev) => prev || chosen.addressLine1 || '');
+        setAddress2((prev) => prev || chosen.addressLine2 || '');
+        setCity((prev) => prev || chosen.city || '');
+        setStateName((prev) => (prev === 'Maharashtra' && chosen.state ? chosen.state : prev));
+        setPincode((prev) => prev || chosen.pincode || '');
       })
-      .then((data) => {
-        if (active) {
-          setQuote(data);
-          setQuoteError(null);
-        }
-      })
-      .catch((err) => {
-        if (active) {
-          // If quote endpoint is unreachable or requires auth, record message gracefully
-          setQuoteError(err instanceof ApiError ? err.message : 'Unable to retrieve server quote');
-        }
-      })
-      .finally(() => {
-        if (active) setQuoteLoading(false);
+      .catch(() => {
+        // Non-fatal: customer can enter address manually
       });
 
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, [cart, shippingMethod, activeCoupon, pincode]);
+  }, [authLoading, customer]);
+
+  const cartSignature = useMemo(
+    () =>
+      cart
+        .map((item) => `${item.id}:${item.variantId ?? ''}:${item.quantity}:${item.isSubscription}`)
+        .join('|'),
+    [cart]
+  );
+
+  const fetchQuote = useCallback(async () => {
+    if (authLoading || !customer) {
+      setQuoteLoading(false);
+      return;
+    }
+
+    if (cart.length === 0) {
+      quoteAbortRef.current?.abort();
+      setQuote(null);
+      setQuoteError(null);
+      setQuoteLoading(false);
+      return;
+    }
+
+    const seq = ++quoteSeqRef.current;
+    quoteAbortRef.current?.abort();
+    const controller = new AbortController();
+    quoteAbortRef.current = controller;
+
+    setQuoteLoading(true);
+    setQuoteError(null);
+
+    try {
+      const data = await checkoutService.getQuote(
+        {
+          shippingMethod,
+          couponCode: activeCoupon ?? undefined,
+          pincode: pincode.trim().length === 6 ? pincode.trim() : undefined,
+        },
+        controller.signal
+      );
+      if (quoteSeqRef.current === seq) {
+        setQuote(data);
+        setQuoteError(null);
+      }
+    } catch (err) {
+      if (controller.signal.aborted || quoteSeqRef.current !== seq) {
+        return;
+      }
+      setQuote(null);
+      setQuoteError(err instanceof ApiError ? err.message : 'Unable to retrieve verified server quote.');
+    } finally {
+      if (quoteSeqRef.current === seq) {
+        setQuoteLoading(false);
+      }
+    }
+  }, [authLoading, customer, cart.length, cartSignature, shippingMethod, activeCoupon, pincode]);
+
+  // Request authoritative server quote whenever verified checkout inputs change
+  useEffect(() => {
+    void fetchQuote();
+
+    return () => {
+      quoteAbortRef.current?.abort();
+      quoteSeqRef.current += 1;
+      setQuoteLoading(false);
+    };
+  }, [fetchQuote]);
 
   const expressFee = shippingMethod === 'express' ? 99 : cartTotals.shippingCharge;
   const serverSubtotal = quote?.totals ? quote.totals.subtotal : cartTotals.subtotal;
@@ -126,7 +197,18 @@ export const CheckoutPage: React.FC = () => {
       return;
     }
 
-    if (quote && !quote.isValid && quote.validationErrors.length > 0) {
+    if (quoteLoading) {
+      setErrorMsg('Please wait while your order total is verified by the server.');
+      return;
+    }
+
+    if (!quote) {
+      setErrorMsg('Order totals must be verified by the server before placing your order.');
+      void fetchQuote();
+      return;
+    }
+
+    if (!quote.isValid && quote.validationErrors.length > 0) {
       setErrorMsg(quote.validationErrors.join(' '));
       return;
     }
@@ -209,6 +291,19 @@ export const CheckoutPage: React.FC = () => {
         >
           {/* Left Column */}
           <div className="lg:col-span-7 flex flex-col gap-space-lg">
+            {cartSyncError && (
+              <div className="p-4 rounded-xl bg-[#fff7ed] border border-[#fed7aa] text-[#9a3412] text-body-sm flex items-center justify-between gap-3">
+                <span>{cartSyncError}</span>
+                <button
+                  type="button"
+                  onClick={() => void retryCartMerge()}
+                  className="px-3 py-1.5 rounded-lg bg-[#ea580c] hover:bg-[#c2410c] text-white text-xs font-semibold shrink-0"
+                >
+                  Retry Cart Sync
+                </button>
+              </div>
+            )}
+
             {errorMsg && (
               <div className="p-4 rounded-xl bg-error-container text-on-error-container text-body-sm">
                 {errorMsg}
@@ -553,19 +648,34 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               )}
 
-              {quoteError && (
-                <div className="p-2.5 rounded-lg bg-surface-container-high text-on-surface-variant text-label-sm flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[16px] text-secondary">info</span>
-                  <span>{quoteError}</span>
+              {quoteError && !quoteLoading && (
+                <div className="p-3 rounded-lg bg-error-container text-on-error-container text-label-sm flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px]">error</span>
+                    <span>{quoteError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void fetchQuote()}
+                    className="px-2.5 py-1 rounded-md bg-primary text-on-primary text-xs font-semibold shrink-0"
+                  >
+                    Retry
+                  </button>
                 </div>
               )}
 
               <div className="flex flex-col gap-space-xs text-body-md text-secondary">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
-                  <span>₹{serverSubtotal.toLocaleString('en-IN')}</span>
+                  <span>
+                    {quoteLoading
+                      ? 'Calculating...'
+                      : !quote
+                        ? '—'
+                        : `₹${serverSubtotal.toLocaleString('en-IN')}`}
+                  </span>
                 </div>
-                {serverSavings > 0 && (
+                {quote && !quoteLoading && serverSavings > 0 && (
                   <div className="flex justify-between text-primary font-medium">
                     <span>Discounts</span>
                     <span>- ₹{serverSavings}</span>
@@ -573,15 +683,26 @@ export const CheckoutPage: React.FC = () => {
                 )}
                 <div className="flex justify-between">
                   <span>Shipping</span>
-                  <span>{serverShipping === 0 ? 'FREE' : `₹${serverShipping}`}</span>
+                  <span>
+                    {quoteLoading
+                      ? 'Calculating...'
+                      : !quote
+                        ? '—'
+                        : serverShipping === 0
+                          ? 'FREE'
+                          : `₹${serverShipping}`}
+                  </span>
                 </div>
                 <div className="flex justify-between pt-3 border-t border-surface-container text-on-surface font-bold text-title-md items-center">
                   <span>Total Payable</span>
                   <div className="flex items-center gap-2">
-                    {quoteLoading && (
+                    {quoteLoading ? (
                       <span className="text-label-xs text-secondary italic">Calculating...</span>
+                    ) : !quote ? (
+                      <span className="text-label-sm text-error">Unavailable</span>
+                    ) : (
+                      <span>₹{serverTotal.toLocaleString('en-IN')}</span>
                     )}
-                    <span>₹{serverTotal.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
@@ -592,14 +713,19 @@ export const CheckoutPage: React.FC = () => {
                   submitting ||
                   cart.length === 0 ||
                   quoteLoading ||
-                  (quote !== null && !quote.isValid)
+                  !quote ||
+                  !quote.isValid
                 }
                 className="w-full bg-primary hover:bg-primary-container text-on-primary py-4 px-space-lg rounded-full text-title-sm flex items-center justify-center gap-space-sm transition-all shadow-md disabled:opacity-60"
               >
                 <span>
                   {submitting
                     ? 'Processing Order...'
-                    : `Place Order · ₹${serverTotal.toLocaleString('en-IN')}`}
+                    : quoteLoading
+                      ? 'Calculating Total...'
+                      : !quote
+                        ? 'Quote Verification Required'
+                        : `Place Order · ₹${serverTotal.toLocaleString('en-IN')}`}
                 </span>
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </button>

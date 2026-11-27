@@ -23,6 +23,7 @@ export const ShopPage: React.FC = () => {
     const [pincode, setPincode] = useState('');
     const [pinMessage, setPinMessage] = useState<string | null>(null);
     const [addedId, setAddedId] = useState<string | null>(null);
+    const [cartActionError, setCartActionError] = useState<string | null>(null);
 
     const { products, productsLoading, addToCart, wishlist, toggleWishlist, apiStatus, apiErrorMessage, retryConnection } = useStore();
 
@@ -360,7 +361,22 @@ export const ShopPage: React.FC = () => {
 
                     {/* Products Matrix */}
                     <div className="col-span-1 lg:col-span-9 flex flex-col gap-8">
-                        {productsLoading ? (
+                        {cartActionError && (
+                            <div
+                                className="p-3.5 rounded-xl bg-error-container text-on-error-container text-body-sm flex items-center justify-between gap-3"
+                                role="alert"
+                            >
+                                <span>{cartActionError}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setCartActionError(null)}
+                                    className="text-xs font-semibold underline shrink-0"
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
+                        )}
+                        {productsLoading && products.length === 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {[1, 2, 3].map((n) => (
                                     <div key={n} className="bg-surface-container-lowest rounded-2xl p-4 h-96 animate-pulse" />
@@ -519,6 +535,7 @@ export const ShopPage: React.FC = () => {
                                                     disabled={isOutOfStock}
                                                     onClick={async () => {
                                                         if (isOutOfStock) return;
+                                                        setCartActionError(null);
                                                         try {
                                                             await addToCart(product, {
                                                                 variantId: activeVariant?.id,
@@ -527,8 +544,12 @@ export const ShopPage: React.FC = () => {
                                                             });
                                                             setAddedId(product.id);
                                                             setTimeout(() => setAddedId(null), 1500);
-                                                        } catch {
-                                                            // Ignore stock limit error cleanly without unhandled rejection
+                                                        } catch (err) {
+                                                            setCartActionError(
+                                                                err instanceof Error
+                                                                    ? err.message
+                                                                    : 'Unable to add product to cart.'
+                                                            );
                                                         }
                                                     }}
                                                     className="bg-primary-container text-on-primary hover:bg-primary text-title-sm px-5 py-2.5 rounded-full font-semibold transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"

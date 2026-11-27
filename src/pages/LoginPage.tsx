@@ -21,8 +21,19 @@ function maskEmailAddress(email: string): string {
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/account';
-  const { setCustomer, refreshCart, apiStatus, apiErrorMessage, retryConnection } = useStore();
+  const rawRedirect = searchParams.get('redirect') || '/account';
+  const redirectTo =
+    rawRedirect.startsWith('/') && !rawRedirect.startsWith('//') && !rawRedirect.startsWith('/login')
+      ? rawRedirect
+      : '/account';
+  const {
+    customer,
+    authLoading,
+    completeAuthenticatedLogin,
+    apiStatus,
+    apiErrorMessage,
+    retryConnection,
+  } = useStore();
 
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'verify-otp'>('login');
   const [showPassword, setShowPassword] = useState(false);
@@ -48,6 +59,12 @@ export const LoginPage: React.FC = () => {
   const [verifying, setVerifying] = useState(false);
   const [resending, setResending] = useState(false);
   const otpInputsRef = useRef<Array<HTMLInputElement | null>>([]);
+
+  useEffect(() => {
+    if (!authLoading && customer && !submitting && !verifying) {
+      navigate(redirectTo, { replace: true });
+    }
+  }, [authLoading, customer, submitting, verifying, navigate, redirectTo]);
 
   useEffect(() => {
     if (authMode !== 'verify-otp') return;
@@ -170,11 +187,21 @@ export const LoginPage: React.FC = () => {
         const res = await authService.login({
           identifier: identifier.trim(),
           password,
+          rememberMe,
         });
-        setCustomer(res.customer);
+        const outcome = await completeAuthenticatedLogin(res.customer, {
+          alreadyMergedOnLogin: res.cartMerged,
+        });
+        if (!outcome.sessionVerified) {
+          throw new ApiError(
+            'Unable to confirm your authenticated session. Please try again.',
+            401,
+            'SESSION_VERIFY_FAILED'
+          );
+        }
         setSuccessMsg('Signed in successfully. Redirecting...');
-        await refreshCart();
-        navigate(redirectTo);
+        setSubmitting(false);
+        navigate(redirectTo, { replace: true });
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -275,10 +302,19 @@ export const LoginPage: React.FC = () => {
     setVerifying(true);
     try {
       const res = await authService.verifyOtp({ email: pendingEmail, otp: code });
-      setCustomer(res.customer);
+      const outcome = await completeAuthenticatedLogin(res.customer, {
+        alreadyMergedOnLogin: res.cartMerged,
+      });
+      if (!outcome.sessionVerified) {
+        throw new ApiError(
+          'Unable to confirm your authenticated session. Please try again.',
+          401,
+          'SESSION_VERIFY_FAILED'
+        );
+      }
       setSuccessMsg('Email verified! Your account is now active. Redirecting...');
-      await refreshCart();
-      navigate(redirectTo);
+      setVerifying(false);
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'OTP_EXPIRED') {

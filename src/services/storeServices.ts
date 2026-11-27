@@ -30,8 +30,14 @@ export interface ResendOtpResponse {
 }
 
 export const authService = {
+  getCsrf: () => apiRequest<{ csrfToken: string }>('/auth/csrf'),
   getSession: () =>
-    apiRequest<{ authenticated: boolean; customer: BackendCustomer | null }>('/auth/session'),
+    apiRequest<{
+      authenticated: boolean;
+      customer: BackendCustomer | null;
+      hasGuestSession?: boolean;
+      csrfToken?: string;
+    }>('/auth/session'),
   getEmailConfigStatus: () =>
     apiRequest<{ configured: boolean }>('/auth/email-configuration-status'),
   register: (body: {
@@ -46,22 +52,28 @@ export const authService = {
       body: JSON.stringify(body),
     }),
   verifyOtp: (body: { email: string; otp: string }) =>
-    apiRequest<{ customer: BackendCustomer }>('/auth/verify-otp', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+    apiRequest<{ customer: BackendCustomer; cartMerged?: boolean; csrfToken?: string }>(
+      '/auth/verify-otp',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
   resendOtp: (body: { email: string }) =>
     apiRequest<ResendOtpResponse>('/auth/resend-otp', {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  login: (body: { identifier: string; password: string }) =>
-    apiRequest<{ customer: BackendCustomer }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
+  login: (body: { identifier: string; password: string; rememberMe?: boolean }) =>
+    apiRequest<{ customer: BackendCustomer; cartMerged?: boolean; csrfToken?: string }>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
   logout: () => apiRequest<{ message: string }>('/auth/logout', { method: 'POST' }),
-  refresh: () => apiRequest<void>('/auth/refresh', { method: 'POST' }),
+  refresh: () => apiRequest<{ refreshed: boolean; csrfToken?: string }>('/auth/refresh', { method: 'POST' }),
 };
 
 export const productService = {
@@ -132,13 +144,10 @@ export const cartService = {
   removeItem: (itemId: string) =>
     apiRequest<unknown>(`/cart/items/${itemId}`, { method: 'DELETE' }),
   clearCart: () => apiRequest<unknown>('/cart', { method: 'DELETE' }),
-  merge: (body: {
-    guestToken?: string;
-    items?: Array<{ variantId: string; quantity: number; isSubscription?: boolean; frequencyWeeks?: number }>;
-  }) =>
+  merge: () =>
     apiRequest<unknown>('/cart/merge', {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({}),
     }),
   applyCoupon: (code: string) =>
     apiRequest<unknown>('/cart/coupon', {
@@ -148,14 +157,18 @@ export const cartService = {
 };
 
 export const checkoutService = {
-  getQuote: (body: {
-    shippingMethod?: 'standard' | 'express';
-    couponCode?: string;
-    pincode?: string;
-  }) =>
+  getQuote: (
+    body: {
+      shippingMethod?: 'standard' | 'express';
+      couponCode?: string;
+      pincode?: string;
+    },
+    signal?: AbortSignal
+  ) =>
     apiRequest<CheckoutQuoteResponse>('/checkout/quote', {
       method: 'POST',
       body: JSON.stringify(body),
+      signal,
     }),
   createOrder: (body: Record<string, unknown>) =>
     apiRequest<unknown>('/checkout/create-order', {

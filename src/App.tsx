@@ -31,9 +31,6 @@ const WishlistPage = lazy(() =>
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage }))
 );
-const AdminOrdersPage = lazy(() =>
-  import('./pages/AdminOrdersPage').then((m) => ({ default: m.AdminOrdersPage }))
-);
 
 const PageFallback: React.FC = () => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -67,8 +64,6 @@ export const App: React.FC = () => {
               <Route path="/wishlist" element={<WishlistPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/account" element={<AccountPage />} />
-              <Route path="/admin" element={<AdminOrdersPage />} />
-              <Route path="/admin/orders" element={<AdminOrdersPage />} />
               <Route path="*" element={<HomePage />} />
             </Routes>
           </Suspense>
