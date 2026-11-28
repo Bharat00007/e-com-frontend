@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { shippingService } from '../services/storeServices';
 import { ApiError } from '../services/apiClient';
+import { CircularLoader } from '../components/ui/CircularLoader';
 
 export const CartPage: React.FC = () => {
   const {
@@ -273,8 +274,12 @@ export const CartPage: React.FC = () => {
                                 >
                                   −
                                 </button>
-                                <span className="text-title-sm px-1.5 text-on-surface font-semibold">
-                                  {item.quantity}
+                                <span className="text-title-sm px-1.5 text-on-surface font-semibold min-w-[20px] text-center inline-flex items-center justify-center">
+                                  {isItemUpdating(item.id) ? (
+                                    <CircularLoader size="xs" color="primary" label="Updating quantity..." />
+                                  ) : (
+                                    item.quantity
+                                  )}
                                 </span>
                                 <button
                                   type="button"

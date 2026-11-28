@@ -236,6 +236,7 @@ export interface StoreContextValue {
     applyCouponCode: (code: string) => Promise<void>;
     clearCart: () => Promise<void>;
     isItemUpdating: (itemId: string) => boolean;
+    isProductAdding: (productId: string) => boolean;
     toggleWishlist: (productId: string) => Promise<void>;
     addToWishlist: (productId: string) => Promise<void>;
     removeFromWishlist: (productId: string) => Promise<void>;
@@ -318,6 +319,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
     const [updatingItemIds, setUpdatingItemIds] = useState<Set<string>>(new Set());
+    const [addingProductIds, setAddingProductIds] = useState<Set<string>>(new Set());
 
     // In-flight mutex to prevent duplicate Add to Cart triggers
     const inFlightAddRef = useRef<Set<string>>(new Set());
@@ -327,6 +329,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const cartVersionRef = useRef<number>(0);
 
     const isItemUpdating = useCallback((itemId: string) => updatingItemIds.has(itemId), [updatingItemIds]);
+    const isProductAdding = useCallback((productId: string) => addingProductIds.has(productId), [addingProductIds]);
 
     const syncCartPayload = useCallback((payload: BackendCartPayload, isMutation = false) => {
         if (!payload || !Array.isArray(payload.items)) return;
@@ -662,6 +665,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setCart(nextCart);
             setCartTotals(computeOptimisticTotals(nextCart));
             setIsCartDrawerOpen(true);
+            setAddingProductIds((prev) => new Set(prev).add(product.id));
 
             try {
                 const payload = (await cartService.addItem({
@@ -678,6 +682,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 throw err;
             } finally {
                 inFlightAddRef.current.delete(lockKey);
+                setAddingProductIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(product.id);
+                    return next;
+                });
             }
         },
         [cart, cartTotals, syncCartPayload]
@@ -878,6 +887,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             applyCouponCode,
             clearCart,
             isItemUpdating,
+            isProductAdding,
             toggleWishlist,
             addToWishlist,
             removeFromWishlist,
@@ -917,6 +927,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             applyCouponCode,
             clearCart,
             isItemUpdating,
+            isProductAdding,
             toggleWishlist,
             addToWishlist,
             removeFromWishlist,

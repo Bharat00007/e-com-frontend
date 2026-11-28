@@ -8,6 +8,7 @@ import {
   CheckoutQuoteResponse,
 } from '../services/storeServices';
 import { ApiError } from '../services/apiClient';
+import { CircularLoader } from '../components/ui/CircularLoader';
 
 export const CheckoutPage: React.FC = () => {
   const {
@@ -688,8 +689,9 @@ export const CheckoutPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <span>₹{serverTotal.toLocaleString('en-IN')}</span>
                     {quoteLoading ? (
-                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-normal animate-pulse">
-                        Verifying...
+                      <span className="text-[10px] text-primary bg-primary/10 px-2 py-0.5 rounded-full font-medium flex items-center gap-1.5">
+                        <CircularLoader size="xs" color="primary" label="Verifying total..." />
+                        <span>Verifying...</span>
                       </span>
                     ) : quote?.isValid ? (
                       <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-normal">
@@ -712,15 +714,25 @@ export const CheckoutPage: React.FC = () => {
                 className="w-full bg-primary hover:bg-primary-container text-on-primary py-4 px-space-lg rounded-full text-title-sm flex items-center justify-center gap-space-sm transition-all shadow-md disabled:opacity-60"
               >
                 <span>
-                  {submitting
-                    ? 'Processing Order...'
-                    : quoteLoading
-                      ? 'Calculating Total...'
-                      : !quote
-                        ? 'Quote Verification Required'
-                        : `Place Order · ₹${serverTotal.toLocaleString('en-IN')}`}
+                  {submitting ? (
+                    <span className="flex items-center gap-2">
+                      <CircularLoader size="sm" color="white" label="Processing Order..." />
+                      <span>Processing Order...</span>
+                    </span>
+                  ) : quoteLoading ? (
+                    <span className="flex items-center gap-2">
+                      <CircularLoader size="sm" color="white" label="Calculating Total..." />
+                      <span>Calculating Total...</span>
+                    </span>
+                  ) : !quote ? (
+                    'Quote Verification Required'
+                  ) : (
+                    `Place Order · ₹${serverTotal.toLocaleString('en-IN')}`
+                  )}
                 </span>
-                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                {!submitting && !quoteLoading && (
+                  <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                )}
               </button>
             </div>
           </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { orderService } from '../services/storeServices';
 import { useStore } from '../context/StoreContext';
+import { PageTransitionLoader } from '../components/ui/PageTransitionLoader';
 
 interface ConfirmedOrder {
   id: string;
@@ -76,11 +77,7 @@ export const OrderConfirmationPage: React.FC = () => {
   }, [state?.order, orderNumberParam, customer]);
 
   if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-20">
-        <div className="h-56 bg-surface-container-low rounded-2xl animate-pulse" />
-      </div>
-    );
+    return <PageTransitionLoader message="Loading order details..." />;
   }
 
   if (!order) {

@@ -2,9 +2,19 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types/store';
+import { CircularLoader } from '../components/ui/CircularLoader';
+import { PageTransitionLoader } from '../components/ui/PageTransitionLoader';
 
 export const WishlistPage: React.FC = () => {
-  const { products, wishlist, removeFromWishlist, addToCart, setIsCartDrawerOpen } = useStore();
+  const {
+    products,
+    productsLoading,
+    wishlist,
+    removeFromWishlist,
+    addToCart,
+    setIsCartDrawerOpen,
+    isProductAdding,
+  } = useStore();
   const [addedId, setAddedId] = useState<string | null>(null);
   const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
 
@@ -59,7 +69,9 @@ export const WishlistPage: React.FC = () => {
 
       {/* Main Wishlist Content */}
       <main className="max-w-[1280px] w-full mx-auto px-margin pb-20">
-        {wishlistedProducts.length === 0 ? (
+        {productsLoading && products.length === 0 ? (
+          <PageTransitionLoader variant="section" message="Loading your saved essentials..." />
+        ) : wishlistedProducts.length === 0 ? (
           <div
             className="bg-surface-container-lowest rounded-3xl p-12 sm:p-16 text-center border border-surface-container max-w-2xl mx-auto my-6 shadow-xs"
             data-purpose="empty-wishlist-state"
@@ -222,14 +234,20 @@ export const WishlistPage: React.FC = () => {
                       </Link>
                       <button
                         type="button"
-                        disabled={isOutOfStock}
+                        disabled={isOutOfStock || isProductAdding(product.id)}
                         onClick={() => handleAddToCart(product)}
-                        className="py-2.5 px-3 rounded-full bg-[#104332] hover:bg-[#0c3326] text-white text-label-md font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="py-2.5 px-3 rounded-full bg-[#104332] hover:bg-[#0c3326] text-white text-label-md font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed min-w-[100px]"
                       >
-                        <span className="material-symbols-outlined text-[18px]">
-                          {addedId === product.id ? 'check' : 'shopping_bag'}
-                        </span>
-                        <span>{addedId === product.id ? 'Added ✓' : 'Add to Bag'}</span>
+                        {isProductAdding(product.id) ? (
+                          <CircularLoader size="xs" color="white" label="Adding to bag..." />
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">
+                              {addedId === product.id ? 'check' : 'shopping_bag'}
+                            </span>
+                            <span>{addedId === product.id ? 'Added ✓' : 'Add to Bag'}</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

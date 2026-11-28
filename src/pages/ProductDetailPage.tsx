@@ -4,11 +4,21 @@ import { HOME_FAQS } from '../data/products';
 import { useStore } from '../context/StoreContext';
 import { shippingService } from '../services/storeServices';
 import { ApiError } from '../services/apiClient';
+import { CircularLoader } from '../components/ui/CircularLoader';
+import { PageTransitionLoader } from '../components/ui/PageTransitionLoader';
 
 export const ProductDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { products, productsLoading, addToCart, customer, toggleWishlist, isInWishlist } = useStore();
+  const {
+    products,
+    productsLoading,
+    addToCart,
+    customer,
+    toggleWishlist,
+    isInWishlist,
+    isProductAdding,
+  } = useStore();
 
   const product = products.find((p) => p.slug === slug) ?? products[0];
   const isLitter = product?.slug === 'clumping-cat-litter';
@@ -22,11 +32,7 @@ export const ProductDetailPage: React.FC = () => {
   const [actionError, setActionError] = useState<string | null>(null);
 
   if (productsLoading && !product) {
-    return (
-      <div className="max-w-[1240px] mx-auto px-4 sm:px-6 py-16">
-        <div className="h-96 bg-neutral-100 rounded-2xl animate-pulse" />
-      </div>
-    );
+    return <PageTransitionLoader message="Loading product details..." />;
   }
 
   if (!product) {
@@ -389,15 +395,19 @@ export const ProductDetailPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 mt-6">
               <button
                 type="button"
-                disabled={isOutOfStock}
+                disabled={isOutOfStock || (product && isProductAdding(product.id))}
                 onClick={handlePrimaryCta}
-                className="sm:col-span-7 bg-black hover:bg-gray-900 text-white font-semibold py-3.5 px-6 rounded-full text-sm sm:text-base tracking-wide transition-all shadow-md active:scale-[0.99] text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                className="sm:col-span-7 bg-black hover:bg-gray-900 text-white font-semibold py-3.5 px-6 rounded-full text-sm sm:text-base tracking-wide transition-all shadow-md active:scale-[0.99] text-center disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {isOutOfStock
-                  ? 'Out of stock'
-                  : purchasePlan === 'subscribe'
-                    ? `Subscribe · ${activeUnit}`
-                    : `Add to cart · ${activeUnit}`}
+                {product && isProductAdding(product.id) ? (
+                  <CircularLoader size="sm" color="white" inlineText="Adding to cart..." label="Adding product to cart" />
+                ) : isOutOfStock ? (
+                  'Out of stock'
+                ) : purchasePlan === 'subscribe' ? (
+                  `Subscribe · ${activeUnit}`
+                ) : (
+                  `Add to cart · ${activeUnit}`
+                )}
               </button>
               <button
                 type="button"

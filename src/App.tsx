@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { StoreProvider } from './context/StoreContext';
 import { Layout } from './components/layout/Layout';
 import { HomePage } from './pages/HomePage';
+import { PageTransitionLoader } from './components/ui/PageTransitionLoader';
 
 const ShopPage = lazy(() =>
   import('./pages/ShopPage').then((m) => ({ default: m.ShopPage }))
@@ -32,12 +33,6 @@ const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((m) => ({ default: m.AccountPage }))
 );
 
-const PageFallback: React.FC = () => (
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-    <div className="h-64 rounded-2xl bg-surface-container-low animate-pulse" />
-  </div>
-);
-
 const ScrollToTop: React.FC = () => {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -52,7 +47,7 @@ export const App: React.FC = () => {
       <BrowserRouter>
         <ScrollToTop />
         <Layout>
-          <Suspense fallback={<PageFallback />}>
+          <Suspense fallback={<PageTransitionLoader message="Loading page..." />}>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/shop" element={<ShopPage />} />

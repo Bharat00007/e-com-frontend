@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../services/storeServices';
 import { useStore } from '../context/StoreContext';
 import { ApiError } from '../services/apiClient';
+import { CircularLoader } from '../components/ui/CircularLoader';
 
 function formatCountdown(totalSeconds: number): string {
   const safe = Math.max(0, totalSeconds);
@@ -503,10 +504,19 @@ export const LoginPage: React.FC = () => {
                     disabled={verifying || otpDigits.join('').length !== 6}
                     className="w-full py-3.5 px-6 rounded-full bg-primary text-on-primary text-title-sm hover:bg-tertiary transition-all duration-200 flex items-center justify-center gap-2 group shadow-sm active:scale-[0.99] disabled:opacity-60"
                   >
-                    <span>{verifying ? 'Verifying Email...' : 'Verify Email'}</span>
-                    <span className="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">
-                      arrow_forward
-                    </span>
+                    {verifying ? (
+                      <span className="flex items-center gap-2">
+                        <CircularLoader size="sm" color="white" label="Verifying Email..." />
+                        <span>Verifying Email...</span>
+                      </span>
+                    ) : (
+                      <>
+                        <span>Verify Email</span>
+                        <span className="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">
+                          arrow_forward
+                        </span>
+                      </>
+                    )}
                   </button>
                 </form>
 
@@ -766,18 +776,35 @@ export const LoginPage: React.FC = () => {
                     disabled={submitting}
                     className="w-full py-3.5 px-6 rounded-full bg-primary text-on-primary text-title-sm hover:bg-tertiary transition-all duration-200 flex items-center justify-center gap-2 group shadow-sm active:scale-[0.99] disabled:opacity-60"
                   >
-                    <span>
-                      {submitting
-                        ? authMode === 'login'
-                          ? 'Signing in...'
-                          : 'Sending verification code...'
-                        : authMode === 'login'
-                          ? 'Sign In to The Sniff Co.'
-                          : 'Create Account'}
-                    </span>
-                    <span className="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">
-                      arrow_forward
-                    </span>
+                    {submitting ? (
+                      <span className="flex items-center gap-2">
+                        <CircularLoader
+                          size="sm"
+                          color="white"
+                          label={
+                            authMode === 'login'
+                              ? 'Signing in...'
+                              : 'Sending verification code...'
+                          }
+                        />
+                        <span>
+                          {authMode === 'login'
+                            ? 'Signing in...'
+                            : 'Sending verification code...'}
+                        </span>
+                      </span>
+                    ) : (
+                      <>
+                        <span>
+                          {authMode === 'login'
+                            ? 'Sign In to The Sniff Co.'
+                            : 'Create Account'}
+                        </span>
+                        <span className="material-symbols-outlined text-[18px] group-hover:translate-x-0.5 transition-transform">
+                          arrow_forward
+                        </span>
+                      </>
+                    )}
                   </button>
                 </form>
 

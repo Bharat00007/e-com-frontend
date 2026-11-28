@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Globe, ShieldCheck, Zap, ArrowLeftRight, Check } from 'lucide-react';
 import { HOME_FAQS, INSTAGRAM_IMAGES, TESTIMONIALS } from '../data/products';
 import { useStore } from '../context/StoreContext';
+import { CircularLoader } from '../components/ui/CircularLoader';
+import { PageTransitionLoader } from '../components/ui/PageTransitionLoader';
 
 const HERO_CAT_IMG =
     'https://lh3.googleusercontent.com/aida-public/AB6AXuAzYHrtCA7SatHmLQTLXUbR-F5BlO2xockuhdaHj4F0gwjXiyyNMaJeOiZ5Fw0a-TjodJuQEVXFT4gzZTg0D4Kg5QRajr5VoXbeTDZQnEqaU0E72AJfb7ZPWwREK3vKTZIlTEviTaPlodoB5UD5CH2EPkaUlXXzwIQfWLjSlrhHmaAbEqd6oHreI4pMaoFAM4gTlHE_TyuP9nsaaFbynjoT0iPN_ktnkcvjYFD31Mz0';
@@ -36,6 +38,7 @@ export const HomePage: React.FC = () => {
         retryConnection,
         toggleWishlist,
         isInWishlist,
+        isProductAdding,
     } = useStore();
     const [selectedCats, setSelectedCats] = useState<string>('1');
     const [addedId, setAddedId] = useState<string | null>(null);
@@ -311,11 +314,7 @@ export const HomePage: React.FC = () => {
                     )}
 
                     {productsLoading && bestsellerCards.length === 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {[1, 2, 3, 4].map((n) => (
-                                <div key={n} className="border border-neutral-200 rounded-3xl p-5 h-96 animate-pulse bg-neutral-50" />
-                            ))}
-                        </div>
+                        <PageTransitionLoader variant="section" message="Loading bestsellers..." />
                     ) : bestsellerCards.length === 0 ? (
                         apiStatus === 'offline' ? (
                             <div
@@ -405,15 +404,19 @@ export const HomePage: React.FC = () => {
                                         </span>
                                         <button
                                             type="button"
-                                            disabled={product.stockQuantity <= 0}
+                                            disabled={product.stockQuantity <= 0 || isProductAdding(product.id)}
                                             onClick={() => handleQuickAdd(product.id)}
-                                            className="bg-black hover:bg-neutral-800 text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="bg-black hover:bg-neutral-800 text-white text-xs font-semibold px-4 py-2.5 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed min-w-[85px] inline-flex items-center justify-center gap-1.5"
                                         >
-                                            {product.stockQuantity <= 0
-                                                ? 'Out of stock'
-                                                : addedId === product.id
-                                                    ? 'Added ✓'
-                                                    : 'Add to cart'}
+                                            {isProductAdding(product.id) ? (
+                                                <CircularLoader size="xs" color="white" label="Adding to cart..." />
+                                            ) : product.stockQuantity <= 0 ? (
+                                                'Out of stock'
+                                            ) : addedId === product.id ? (
+                                                'Added ✓'
+                                            ) : (
+                                                'Add to cart'
+                                            )}
                                         </button>
                                     </div>
                                 </div>

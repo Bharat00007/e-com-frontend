@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { shippingService } from '../services/storeServices';
+import { CircularLoader } from '../components/ui/CircularLoader';
+import { PageTransitionLoader } from '../components/ui/PageTransitionLoader';
 
 type CategoryPill = 'all' | 'cats' | 'dogs' | 'cat-litter' | 'grooming';
 
@@ -25,7 +27,17 @@ export const ShopPage: React.FC = () => {
     const [addedId, setAddedId] = useState<string | null>(null);
     const [cartActionError, setCartActionError] = useState<string | null>(null);
 
-    const { products, productsLoading, addToCart, wishlist, toggleWishlist, apiStatus, apiErrorMessage, retryConnection } = useStore();
+    const {
+        products,
+        productsLoading,
+        addToCart,
+        wishlist,
+        toggleWishlist,
+        apiStatus,
+        apiErrorMessage,
+        retryConnection,
+        isProductAdding,
+    } = useStore();
 
     useEffect(() => {
         const paramCat = (searchParams.get('category') as CategoryPill) || 'all';
@@ -377,11 +389,7 @@ export const ShopPage: React.FC = () => {
                             </div>
                         )}
                         {productsLoading && products.length === 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {[1, 2, 3].map((n) => (
-                                    <div key={n} className="bg-surface-container-lowest rounded-2xl p-4 h-96 animate-pulse" />
-                                ))}
-                            </div>
+                            <PageTransitionLoader variant="section" message="Loading pet essentials..." />
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {filteredProducts.map((product) => {
@@ -532,7 +540,7 @@ export const ShopPage: React.FC = () => {
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    disabled={isOutOfStock}
+                                                    disabled={isOutOfStock || isProductAdding(product.id)}
                                                     onClick={async () => {
                                                         if (isOutOfStock) return;
                                                         setCartActionError(null);
@@ -552,12 +560,18 @@ export const ShopPage: React.FC = () => {
                                                             );
                                                         }
                                                     }}
-                                                    className="bg-primary-container text-on-primary hover:bg-primary text-title-sm px-5 py-2.5 rounded-full font-semibold transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    className="bg-primary-container text-on-primary hover:bg-primary text-title-sm px-5 py-2.5 rounded-full font-semibold transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed min-w-[95px]"
                                                 >
-                                                    <span className="material-symbols-outlined text-[18px]">
-                                                        {isOutOfStock ? 'block' : addedId === product.id ? 'check' : 'add'}
-                                                    </span>
-                                                    <span>{isOutOfStock ? 'Sold out' : addedId === product.id ? 'Added' : 'Add'}</span>
+                                                    {isProductAdding(product.id) ? (
+                                                        <CircularLoader size="xs" color="white" label="Adding to cart..." />
+                                                    ) : (
+                                                        <>
+                                                            <span className="material-symbols-outlined text-[18px]">
+                                                                {isOutOfStock ? 'block' : addedId === product.id ? 'check' : 'add'}
+                                                            </span>
+                                                            <span>{isOutOfStock ? 'Sold out' : addedId === product.id ? 'Added' : 'Add'}</span>
+                                                        </>
+                                                    )}
                                                 </button>
                                             </div>
                                         </article>

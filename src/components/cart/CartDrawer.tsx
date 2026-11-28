@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Plus, Minus, Trash2, ArrowRight, ShoppingBag, ShieldCheck, Truck } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
+import { CircularLoader } from '../ui/CircularLoader';
 
 const FREE_SHIPPING_THRESHOLD = 499;
 
@@ -210,8 +211,12 @@ export const CartDrawer: React.FC = () => {
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </button>
-                        <span className="w-8 text-center text-xs font-bold text-neutral-800">
-                          {item.quantity}
+                        <span className="w-8 flex items-center justify-center text-xs font-bold text-neutral-800">
+                          {isItemUpdating(item.id) ? (
+                            <CircularLoader size="xs" color="primary" label="Updating quantity..." />
+                          ) : (
+                            item.quantity
+                          )}
                         </span>
                         <button
                           type="button"

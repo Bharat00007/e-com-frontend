@@ -7,6 +7,7 @@ import {
   subscriptionService,
   OrderTrackingData,
 } from '../services/storeServices';
+import { PageTransitionLoader } from '../components/ui/PageTransitionLoader';
 
 type AccountTab = 'dashboard' | 'subscriptions' | 'orders' | 'addresses' | 'wishlist' | 'tracking';
 
@@ -171,11 +172,7 @@ export const AccountPage: React.FC = () => {
   }, [customer]);
 
   if (authLoading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-20">
-        <div className="h-48 bg-surface-container-low rounded-2xl animate-pulse" />
-      </div>
-    );
+    return <PageTransitionLoader message="Checking authentication..." />;
   }
 
   if (!customer) {
@@ -353,7 +350,9 @@ export const AccountPage: React.FC = () => {
             {/* Content Area */}
             <div className="lg:col-span-8 flex flex-col gap-6">
               {dataLoading ? (
-                <div className="h-48 bg-surface-container-lowest rounded-2xl animate-pulse" />
+                <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm">
+                  <PageTransitionLoader variant="section" message="Loading your account..." />
+                </div>
               ) : (
                 <>
                   {(activeTab === 'dashboard' || activeTab === 'subscriptions') && (
@@ -648,10 +647,7 @@ export const AccountPage: React.FC = () => {
                       </div>
 
                       {trackingLoading ? (
-                        <div className="space-y-4 py-8">
-                          <div className="h-6 bg-surface-container-low rounded-xl animate-pulse" />
-                          <div className="h-32 bg-surface-container-low rounded-2xl animate-pulse" />
-                        </div>
+                        <PageTransitionLoader variant="section" message="Retrieving live tracking..." />
                       ) : trackingError ? (
                         <div className="p-4 rounded-xl bg-error-container text-on-error-container text-body-sm">
                           {trackingError}
