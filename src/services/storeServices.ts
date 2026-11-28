@@ -245,11 +245,25 @@ export const orderService = {
   cancelOrder: (id: string) => apiRequest<unknown>(`/orders/${id}/cancel`, { method: 'POST' }),
 };
 
+let cachedPaymentConfig: { onlinePaymentsAvailable: boolean; provider: string; message: string } | null = null;
+let paymentConfigPromise: Promise<{ onlinePaymentsAvailable: boolean; provider: string; message: string }> | null = null;
+
 export const paymentService = {
-  getConfigurationStatus: () =>
-    apiRequest<{ onlinePaymentsAvailable: boolean; provider: string; message: string }>(
+  getConfigurationStatus: async () => {
+    if (cachedPaymentConfig) return cachedPaymentConfig;
+    if (paymentConfigPromise) return paymentConfigPromise;
+    paymentConfigPromise = apiRequest<{ onlinePaymentsAvailable: boolean; provider: string; message: string }>(
       '/payments/configuration-status'
-    ),
+    ).then((res) => {
+      cachedPaymentConfig = res;
+      paymentConfigPromise = null;
+      return res;
+    }).catch((err) => {
+      paymentConfigPromise = null;
+      throw err;
+    });
+    return paymentConfigPromise;
+  },
   createGatewayOrder: (orderId: string) =>
     apiRequest<unknown>('/payments/create-gateway-order', {
       method: 'POST',

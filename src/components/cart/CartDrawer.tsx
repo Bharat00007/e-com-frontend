@@ -10,6 +10,7 @@ export const CartDrawer: React.FC = () => {
     cart,
     cartCount,
     cartTotals,
+    customer,
     isCartDrawerOpen,
     setIsCartDrawerOpen,
     updateQuantity,
@@ -45,7 +46,7 @@ export const CartDrawer: React.FC = () => {
 
   const handleCheckout = () => {
     setIsCartDrawerOpen(false);
-    navigate('/checkout');
+    navigate(customer ? '/checkout' : '/login?redirect=/checkout');
   };
 
   const handleViewCart = () => {

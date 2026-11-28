@@ -628,6 +628,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             const idempotencyKey = `add-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+            // Optimistic cart state update for instant UI responsiveness
+            const prevCart = cart;
+            const prevTotals = cartTotals;
+
+            const existingIndex = cart.findIndex(
+                (i) => i.variantId === variantId && i.isSubscription === isSubscription
+            );
+
+            let nextCart: CartItem[];
+            if (existingIndex >= 0) {
+                nextCart = cart.map((item, idx) =>
+                    idx === existingIndex
+                        ? { ...item, quantity: item.quantity + quantity }
+                        : item
+                );
+            } else {
+                const optItem: CartItem = {
+                    id: `opt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    productId: product.id,
+                    variantId,
+                    name: product.name,
+                    variantLabel: chosenVariant?.label ?? product.unitLabel ?? 'Standard',
+                    image: product.image,
+                    unitPrice: chosenVariant?.price ?? product.price,
+                    quantity,
+                    isSubscription,
+                    frequencyWeeks,
+                };
+                nextCart = [...cart, optItem];
+            }
+
+            setCart(nextCart);
+            setCartTotals(computeOptimisticTotals(nextCart));
+            setIsCartDrawerOpen(true);
+
             try {
                 const payload = (await cartService.addItem({
                     variantId,
@@ -637,12 +672,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     idempotencyKey,
                 })) as BackendCartPayload;
                 syncCartPayload(payload, true);
-                setIsCartDrawerOpen(true);
+            } catch (err) {
+                setCart(prevCart);
+                setCartTotals(prevTotals);
+                throw err;
             } finally {
                 inFlightAddRef.current.delete(lockKey);
             }
         },
-        [syncCartPayload]
+        [cart, cartTotals, syncCartPayload]
     );
 
     const removeFromCart = useCallback(

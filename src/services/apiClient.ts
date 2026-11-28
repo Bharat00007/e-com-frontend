@@ -1,20 +1,23 @@
 function normalizeApiBaseUrl(rawUrl?: string): string {
-  // Use same-origin `/api/v1` proxy in local dev AND when deployed on Vercel (via vercel.json external rewrite)
-  // so HttpOnly session cookies work natively without third-party cookie rejection.
+  // In local development on plain HTTP localhost, use the local Vite proxy `/api/v1`
+  // so HttpOnly cookies can be stored and sent without browser cross-site HTTPS restrictions.
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.vercel.app')) {
+    if (host === 'localhost' || host === '127.0.0.1') {
       return '/api/v1';
     }
   }
-  const url = (rawUrl || 'https://e-com-backend-wheat.vercel.app').trim().replace(/\/+$/, '');
-  if (url.endsWith('/api/v1')) {
-    return url;
+
+  // In production / deployed environments, always use the explicitly configured API URL or production backend
+  const envUrl = (rawUrl || import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (envUrl) {
+    const trimmed = envUrl.replace(/\/+$/, '');
+    if (trimmed.endsWith('/api/v1')) return trimmed;
+    if (trimmed.endsWith('/api')) return `${trimmed}/v1`;
+    return `${trimmed}/api/v1`;
   }
-  if (url.endsWith('/api')) {
-    return `${url}/v1`;
-  }
-  return `${url}/api/v1`;
+
+  return 'https://e-com-backend-wheat.vercel.app/api/v1';
 }
 
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
@@ -24,6 +27,7 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 // Non-persistent in-memory CSRF token (never stored in localStorage)
 let inMemoryCsrfToken: string | null = null;
+let csrfPromise: Promise<string | null> | null = null;
 let legacyCleaned = false;
 
 /** Clears deprecated unauthenticated/token keys from earlier client builds so stale caches cannot leak. */
@@ -47,6 +51,7 @@ export function setInMemoryCsrfToken(token: string | null): void {
 
 export function resetInMemoryCsrfToken(): void {
   inMemoryCsrfToken = null;
+  csrfPromise = null;
 }
 
 export class ApiError extends Error {
@@ -86,29 +91,37 @@ function logApiDiagnostic(
 
 async function ensureCsrfToken(): Promise<string | null> {
   if (inMemoryCsrfToken) return inMemoryCsrfToken;
-  try {
-    const res = await fetch(`${API_BASE_URL}/auth/csrf`, {
-      method: 'GET',
-      credentials: 'include',
-    });
-    const headerToken = res.headers.get('x-csrf-token');
-    if (headerToken) {
-      inMemoryCsrfToken = headerToken;
-      return inMemoryCsrfToken;
-    }
-    if (res.ok) {
-      const json = (await res.json().catch(() => null)) as {
-        data?: { csrfToken?: string };
-      } | null;
-      if (json?.data?.csrfToken) {
-        inMemoryCsrfToken = json.data.csrfToken;
+  if (csrfPromise) return csrfPromise;
+
+  csrfPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/csrf`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      const headerToken = res.headers.get('x-csrf-token');
+      if (headerToken) {
+        inMemoryCsrfToken = headerToken;
         return inMemoryCsrfToken;
       }
+      if (res.ok) {
+        const json = (await res.json().catch(() => null)) as {
+          data?: { csrfToken?: string };
+        } | null;
+        if (json?.data?.csrfToken) {
+          inMemoryCsrfToken = json.data.csrfToken;
+          return inMemoryCsrfToken;
+        }
+      }
+    } catch {
+      // Gracefully fall through cleanly
+    } finally {
+      csrfPromise = null;
     }
-  } catch {
-    // Gracefully fall through cleanly
-  }
-  return inMemoryCsrfToken;
+    return inMemoryCsrfToken;
+  })();
+
+  return csrfPromise;
 }
 
 export interface ApiRequestOptions extends RequestInit {

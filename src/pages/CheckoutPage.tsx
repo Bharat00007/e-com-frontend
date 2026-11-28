@@ -665,17 +665,11 @@ export const CheckoutPage: React.FC = () => {
               )}
 
               <div className="flex flex-col gap-space-xs text-body-md text-secondary">
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span>Subtotal</span>
-                  <span>
-                    {quoteLoading
-                      ? 'Calculating...'
-                      : !quote
-                        ? '—'
-                        : `₹${serverSubtotal.toLocaleString('en-IN')}`}
-                  </span>
+                  <span>₹{serverSubtotal.toLocaleString('en-IN')}</span>
                 </div>
-                {quote && !quoteLoading && serverSavings > 0 && (
+                {serverSavings > 0 && (
                   <div className="flex justify-between text-primary font-medium">
                     <span>Discounts</span>
                     <span>- ₹{serverSavings}</span>
@@ -684,25 +678,24 @@ export const CheckoutPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span>Shipping</span>
                   <span>
-                    {quoteLoading
-                      ? 'Calculating...'
-                      : !quote
-                        ? '—'
-                        : serverShipping === 0
-                          ? 'FREE'
-                          : `₹${serverShipping}`}
+                    {serverShipping === 0
+                      ? 'FREE'
+                      : `₹${serverShipping}`}
                   </span>
                 </div>
                 <div className="flex justify-between pt-3 border-t border-surface-container text-on-surface font-bold text-title-md items-center">
                   <span>Total Payable</span>
                   <div className="flex items-center gap-2">
+                    <span>₹{serverTotal.toLocaleString('en-IN')}</span>
                     {quoteLoading ? (
-                      <span className="text-label-xs text-secondary italic">Calculating...</span>
-                    ) : !quote ? (
-                      <span className="text-label-sm text-error">Unavailable</span>
-                    ) : (
-                      <span>₹{serverTotal.toLocaleString('en-IN')}</span>
-                    )}
+                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-normal animate-pulse">
+                        Verifying...
+                      </span>
+                    ) : quote?.isValid ? (
+                      <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-normal">
+                        Verified
+                      </span>
+                    ) : null}
                   </div>
                 </div>
               </div>
