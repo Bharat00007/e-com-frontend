@@ -118,26 +118,26 @@ export const HomePage: React.FC = () => {
                         </div>
 
                         {/* Right Column: Packaging Mockups */}
-                        <div className="lg:col-span-6 flex justify-center lg:justify-end relative">
-                            <div className="flex items-end gap-5 sm:gap-7">
+                        <div className="lg:col-span-6 flex justify-center lg:justify-end relative w-full overflow-hidden sm:overflow-visible">
+                            <div className="flex items-end justify-center gap-3 sm:gap-7 w-full max-w-md lg:max-w-none">
                                 {/* Cat Litter Bag Mockup Card */}
-                                <div className="w-64 sm:w-80 bg-white rounded-3xl p-5 shadow-2xl border-4 border-white/10 flex flex-col items-center">
-                                    <div className="w-full bg-[#ecf7f1] rounded-2xl p-4 flex flex-col items-center text-center relative overflow-hidden border border-[#cfe6db]">
-                                        <div className="flex items-center gap-1.5 mb-2">
-                                            <span className="w-5 h-5 rounded-full bg-[#104332] text-white text-[10px] font-bold flex items-center justify-center">
+                                <div className="w-[58%] sm:w-80 max-w-[270px] bg-white rounded-2xl sm:rounded-3xl p-3 sm:p-5 shadow-2xl border-2 sm:border-4 border-white/10 flex flex-col items-center">
+                                    <div className="w-full bg-[#ecf7f1] rounded-xl sm:rounded-2xl p-2.5 sm:p-4 flex flex-col items-center text-center relative overflow-hidden border border-[#cfe6db]">
+                                        <div className="flex items-center gap-1 sm:gap-1.5 mb-1.5 sm:mb-2">
+                                            <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-[#104332] text-white text-[9px] sm:text-[10px] font-bold flex items-center justify-center">
                                                 S
                                             </span>
-                                            <span className="text-[10px] font-bold tracking-widest text-[#104332]">
+                                            <span className="text-[9px] sm:text-[10px] font-bold tracking-widest text-[#104332]">
                                                 THE SNIFF CO.
                                             </span>
                                         </div>
-                                        <span className="bg-[#104332] text-[#86efac] text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-2">
+                                        <span className="bg-[#104332] text-[#86efac] text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider mb-1.5 sm:mb-2">
                                             CAT LITTER
                                         </span>
-                                        <div className="w-36 h-36 rounded-full overflow-hidden my-2 border-4 border-white shadow-inner bg-amber-50">
+                                        <div className="w-24 h-24 sm:w-36 sm:h-36 rounded-full overflow-hidden my-1 sm:my-2 border-2 sm:border-4 border-white shadow-inner bg-amber-50">
                                             <img
                                                 alt="Fluffy domestic cat"
-                                                className="w-full h-full object-cover"
+                                                className="w-full h-full object-cover object-top"
                                                 decoding="async"
                                                 fetchPriority="high"
                                                 height={144}
@@ -145,30 +145,30 @@ export const HomePage: React.FC = () => {
                                                 width={144}
                                             />
                                         </div>
-                                        <div className="text-[11px] font-semibold text-[#0b2e22] mt-1">
+                                        <div className="text-[10px] sm:text-[11px] font-semibold text-[#0b2e22] mt-0.5 sm:mt-1">
                                             ACTIVATED CARBON · 5kg
                                         </div>
-                                        <div className="w-full bg-[#104332] text-white text-[9px] py-1.5 rounded-lg mt-3 font-semibold uppercase tracking-wider">
+                                        <div className="w-full bg-[#104332] text-white text-[8px] sm:text-[9px] py-1 sm:py-1.5 rounded-lg mt-2 sm:mt-3 font-semibold uppercase tracking-wider">
                                             Superior Clumping Formula
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Sleek Grooming Shampoo Bottle Mockup */}
-                                <div className="w-36 sm:w-44 bg-white rounded-3xl p-4 shadow-xl border-4 border-white/10 flex flex-col items-center mb-2">
-                                    <div className="w-7 h-5 bg-neutral-900 rounded-t-sm mb-0.5" />
-                                    <div className="w-3 h-4 bg-neutral-300" />
-                                    <div className="w-full bg-gradient-to-b from-[#2e1d0f] to-[#1a1109] rounded-2xl p-3 text-center text-white flex flex-col items-center border border-amber-900/40">
-                                        <div className="w-4 h-4 rounded-full border border-white/30 text-[8px] flex items-center justify-center mb-1">
+                                <div className="w-[38%] sm:w-44 max-w-[165px] bg-white rounded-2xl sm:rounded-3xl p-2 sm:p-4 shadow-xl border-2 sm:border-4 border-white/10 flex flex-col items-center mb-2">
+                                    <div className="w-5 sm:w-7 h-3.5 sm:h-5 bg-neutral-900 rounded-t-sm mb-0.5" />
+                                    <div className="w-2.5 sm:w-3 h-3 sm:h-4 bg-neutral-300" />
+                                    <div className="w-full bg-gradient-to-b from-[#2e1d0f] to-[#1a1109] rounded-xl sm:rounded-2xl p-2 sm:p-3 text-center text-white flex flex-col items-center border border-amber-900/40">
+                                        <div className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border border-white/30 text-[7px] sm:text-[8px] flex items-center justify-center mb-1">
                                             S
                                         </div>
-                                        <span className="text-[8px] font-semibold tracking-wider text-amber-200">
+                                        <span className="text-[7px] sm:text-[8px] font-semibold tracking-wider text-amber-200">
                                             THE SNIFF CO.
                                         </span>
-                                        <div className="w-14 h-14 rounded-full overflow-hidden my-2 border-2 border-amber-500/30">
+                                        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden my-1.5 sm:my-2 border-2 border-amber-500/30">
                                             <img
                                                 alt="Golden Retriever puppy"
-                                                className="w-full h-full object-cover"
+                                                className="w-full h-full object-cover object-center"
                                                 decoding="async"
                                                 fetchPriority="high"
                                                 height={56}
@@ -176,10 +176,10 @@ export const HomePage: React.FC = () => {
                                                 width={56}
                                             />
                                         </div>
-                                        <p className="text-[9px] font-bold text-amber-100 uppercase tracking-tighter">
+                                        <p className="text-[8px] sm:text-[9px] font-bold text-amber-100 uppercase tracking-tighter">
                                             Soft &amp; Silky
                                         </p>
-                                        <p className="text-[7px] text-amber-300">Oatmeal &amp; Aloe · 200ml</p>
+                                        <p className="text-[6.5px] sm:text-[7px] text-amber-300">Oatmeal &amp; Aloe · 200ml</p>
                                     </div>
                                 </div>
                             </div>
@@ -226,23 +226,23 @@ export const HomePage: React.FC = () => {
                     <h2 className="font-heading-syne text-2xl sm:text-3xl font-bold mb-8">Shop by pet</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* For Cats */}
-                        <div className="border border-neutral-200 rounded-3xl p-8 hover:border-neutral-400 transition-all flex items-center justify-between bg-[#FCFCFB]">
+                        <div className="border border-neutral-200 rounded-3xl p-5 sm:p-8 hover:border-neutral-400 transition-all flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#FCFCFB]">
                             <div className="max-w-[240px]">
-                                <h3 className="font-heading-syne text-2xl font-bold mb-2">For cats</h3>
-                                <p className="text-neutral-500 text-sm mb-6">Litter, shampoo, dry shampoo</p>
+                                <h3 className="font-heading-syne text-xl sm:text-2xl font-bold mb-1 sm:mb-2">For cats</h3>
+                                <p className="text-neutral-500 text-xs sm:text-sm mb-4 sm:mb-6">Litter, shampoo, dry shampoo</p>
                                 <Link
-                                    className="inline-flex items-center text-sm font-bold text-neutral-900 group"
+                                    className="inline-flex items-center text-xs sm:text-sm font-bold text-neutral-900 group"
                                     to="/shop?category=cats"
                                 >
                                     Shop cats{' '}
                                     <span className="ml-1 transition-transform group-hover:translate-x-1">→</span>
                                 </Link>
                             </div>
-                            <div className="w-28 sm:w-36 bg-[#eef7f2] p-2.5 rounded-2xl border border-[#d2eadb] shadow-sm flex flex-col items-center">
+                            <div className="w-24 sm:w-36 self-end sm:self-auto bg-[#eef7f2] p-2 sm:p-2.5 rounded-2xl border border-[#d2eadb] shadow-sm flex flex-col items-center shrink-0">
                                 <span className="text-[8px] font-bold text-[#104332] uppercase">Cat Litter</span>
                                 <img
                                     alt="Cat Litter bag"
-                                    className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full my-1.5 border border-white"
+                                    className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-full my-1 sm:my-1.5 border border-white"
                                     decoding="async"
                                     height={80}
                                     loading="lazy"
@@ -254,23 +254,23 @@ export const HomePage: React.FC = () => {
                         </div>
 
                         {/* For Dogs */}
-                        <div className="border border-neutral-200 rounded-3xl p-8 hover:border-neutral-400 transition-all flex items-center justify-between bg-[#FCFCFB]">
+                        <div className="border border-neutral-200 rounded-3xl p-5 sm:p-8 hover:border-neutral-400 transition-all flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#FCFCFB]">
                             <div className="max-w-[240px]">
-                                <h3 className="font-heading-syne text-2xl font-bold mb-2">For dogs</h3>
-                                <p className="text-neutral-500 text-sm mb-6">Shampoo, 3-in-1, dry shampoo</p>
+                                <h3 className="font-heading-syne text-xl sm:text-2xl font-bold mb-1 sm:mb-2">For dogs</h3>
+                                <p className="text-neutral-500 text-xs sm:text-sm mb-4 sm:mb-6">Shampoo, 3-in-1, dry shampoo</p>
                                 <Link
-                                    className="inline-flex items-center text-sm font-bold text-neutral-900 group"
+                                    className="inline-flex items-center text-xs sm:text-sm font-bold text-neutral-900 group"
                                     to="/shop?category=dogs"
                                 >
                                     Shop dogs{' '}
                                     <span className="ml-1 transition-transform group-hover:translate-x-1">→</span>
                                 </Link>
                             </div>
-                            <div className="w-28 sm:w-36 bg-[#f7f4ef] p-2.5 rounded-2xl border border-[#ece4d3] shadow-sm flex flex-col items-center">
+                            <div className="w-24 sm:w-36 self-end sm:self-auto bg-[#f7f4ef] p-2 sm:p-2.5 rounded-2xl border border-[#ece4d3] shadow-sm flex flex-col items-center shrink-0">
                                 <span className="text-[8px] font-bold text-amber-900 uppercase">Dog Care</span>
                                 <img
                                     alt="Dog Shampoo bottle"
-                                    className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full my-1.5 border border-white"
+                                    className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-full my-1 sm:my-1.5 border border-white"
                                     decoding="async"
                                     height={80}
                                     loading="lazy"
@@ -535,8 +535,8 @@ export const HomePage: React.FC = () => {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
                         <div className="lg:col-span-6 flex justify-center">
-                            <div className="w-full max-w-md border border-neutral-200 rounded-3xl p-6 sm:p-8 bg-[#FCFCFB] flex items-center justify-center">
-                                <div className="w-64 sm:w-72 bg-[#eef7f2] rounded-2xl p-4 border border-[#cfe6db] flex flex-col items-center shadow-sm">
+                            <div className="w-full max-w-md border border-neutral-200 rounded-3xl p-4 sm:p-8 bg-[#FCFCFB] flex items-center justify-center">
+                                <div className="w-full max-w-[260px] sm:w-72 bg-[#eef7f2] rounded-2xl p-4 border border-[#cfe6db] flex flex-col items-center shadow-sm">
                                     <span className="text-[10px] font-bold tracking-widest text-[#104332] uppercase mb-1">
                                         THE SNIFF CO.
                                     </span>
@@ -545,7 +545,7 @@ export const HomePage: React.FC = () => {
                                     </span>
                                     <img
                                         alt="Cat portrait packaging"
-                                        className="w-40 h-40 object-cover rounded-full my-2 border-4 border-white shadow-md"
+                                        className="w-32 h-32 sm:w-40 sm:h-40 object-cover rounded-full my-2 border-4 border-white shadow-md"
                                         decoding="async"
                                         height={160}
                                         loading="lazy"

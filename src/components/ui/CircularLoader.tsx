@@ -1,7 +1,7 @@
 import React from 'react';
 
 export type CircularLoaderSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
-export type CircularLoaderColor = 'primary' | 'white' | 'muted' | 'current';
+export type CircularLoaderColor = 'primary' | 'white' | 'muted' | 'current' | 'currentColor';
 
 export interface CircularLoaderProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Size variant: xs (14px), sm (18px), md (28px), lg (40px), xl (52px) */
@@ -48,6 +48,11 @@ const COLOR_CONFIG: Record<
     textColor: 'text-secondary',
   },
   current: {
+    stroke: 'currentColor',
+    track: 'currentColor',
+    textColor: 'text-current',
+  },
+  currentColor: {
     stroke: 'currentColor',
     track: 'currentColor',
     textColor: 'text-current',

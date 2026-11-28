@@ -30,6 +30,7 @@ export const ProductDetailPage: React.FC = () => {
   const [showClumpModal, setShowClumpModal] = useState(false);
   const [bundleAdded, setBundleAdded] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [isBuyingNow, setIsBuyingNow] = useState(false);
 
   if (productsLoading && !product) {
     return <PageTransitionLoader message="Loading product details..." />;
@@ -72,7 +73,8 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   const handleBuyNow = async () => {
-    if (isOutOfStock) return;
+    if (isOutOfStock || isBuyingNow) return;
+    setIsBuyingNow(true);
     setActionError(null);
     try {
       await addToCart(product, {
@@ -85,6 +87,8 @@ export const ProductDetailPage: React.FC = () => {
       navigate(customer ? '/checkout' : '/login?redirect=/checkout');
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Unable to proceed with Buy Now.');
+    } finally {
+      setIsBuyingNow(false);
     }
   };
 
@@ -411,11 +415,15 @@ export const ProductDetailPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={isOutOfStock}
+                disabled={isOutOfStock || isBuyingNow}
                 onClick={handleBuyNow}
-                className="sm:col-span-3 bg-white hover:bg-gray-50 border border-gray-900 text-gray-900 font-semibold py-3.5 px-4 rounded-full text-sm sm:text-base tracking-wide transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                className="sm:col-span-3 bg-white hover:bg-gray-50 border border-gray-900 text-gray-900 font-semibold py-3.5 px-4 rounded-full text-sm sm:text-base tracking-wide transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
               >
-                Buy now
+                {isBuyingNow ? (
+                  <CircularLoader size="xs" color="currentColor" inlineText="Loading..." label="Processing Buy Now" />
+                ) : (
+                  'Buy now'
+                )}
               </button>
               <button
                 type="button"

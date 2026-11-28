@@ -26,6 +26,16 @@ export const CartPage: React.FC = () => {
   const [pincode, setPincode] = useState('');
   const [editingPin, setEditingPin] = useState(false);
   const [pinStatus, setPinStatus] = useState<string | null>(null);
+  const [isProceedingToCheckout, setIsProceedingToCheckout] = useState(false);
+
+  const handleProceedToCheckout = () => {
+    if (isProceedingToCheckout) return;
+    setIsProceedingToCheckout(true);
+    const target = customer ? '/checkout' : '/login?redirect=/checkout';
+    setTimeout(() => {
+      navigate(target);
+    }, 120);
+  };
   const [cartError, setCartError] = useState<string | null>(null);
 
   const handleQtyChange = async (itemId: string, delta: number) => {
@@ -452,13 +462,20 @@ export const CartPage: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={() => navigate(customer ? '/checkout' : '/login?redirect=/checkout')}
-                    className="w-full bg-on-surface hover:bg-primary-container text-on-primary text-center text-title-sm py-4 rounded-full transition-all duration-300 flex items-center justify-center gap-2 group shadow-sm"
+                    disabled={isProceedingToCheckout}
+                    onClick={handleProceedToCheckout}
+                    className="w-full bg-on-surface hover:bg-primary-container text-on-primary text-center text-title-sm py-4 rounded-full transition-all duration-300 flex items-center justify-center gap-2 group shadow-sm disabled:opacity-75 disabled:cursor-wait"
                   >
-                    <span>Proceed to Checkout</span>
-                    <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">
-                      arrow_forward
-                    </span>
+                    {isProceedingToCheckout ? (
+                      <CircularLoader size="sm" color="white" label="Preparing checkout..." inlineText="Proceeding to Checkout..." />
+                    ) : (
+                      <>
+                        <span>Proceed to Checkout</span>
+                        <span className="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">
+                          arrow_forward
+                        </span>
+                      </>
+                    )}
                   </button>
                 </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Plus, Minus, Trash2, ArrowRight, ShoppingBag, ShieldCheck, Truck } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
@@ -21,6 +21,7 @@ export const CartDrawer: React.FC = () => {
 
   const navigate = useNavigate();
   const drawerRef = useRef<HTMLDivElement>(null);
+  const [isProceedingToCheckout, setIsProceedingToCheckout] = useState(false);
 
   // Close on Escape key press
   useEffect(() => {
@@ -37,17 +38,22 @@ export const CartDrawer: React.FC = () => {
   // Lock body scroll when drawer is open
   useEffect(() => {
     if (isCartDrawerOpen) {
-      const originalStyle = window.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
       return () => {
-        document.body.style.overflow = originalStyle;
+        document.body.style.overflow = '';
       };
     }
   }, [isCartDrawerOpen]);
 
   const handleCheckout = () => {
-    setIsCartDrawerOpen(false);
-    navigate(customer ? '/checkout' : '/login?redirect=/checkout');
+    if (isProceedingToCheckout) return;
+    setIsProceedingToCheckout(true);
+    const target = customer ? '/checkout' : '/login?redirect=/checkout';
+    setTimeout(() => {
+      setIsCartDrawerOpen(false);
+      navigate(target);
+      setIsProceedingToCheckout(false);
+    }, 120);
   };
 
   const handleViewCart = () => {
@@ -83,10 +89,10 @@ export const CartDrawer: React.FC = () => {
       />
 
       {/* Slide-in Drawer Container */}
-      <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="fixed inset-y-0 right-0 max-w-full flex sm:pl-10 w-full sm:w-auto">
         <div
           ref={drawerRef}
-          className={`w-screen max-w-md bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
+          className={`w-full sm:w-[420px] max-w-full bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out ${
             isCartDrawerOpen ? 'translate-x-0' : 'translate-x-full'
           }`}
         >
@@ -250,7 +256,7 @@ export const CartDrawer: React.FC = () => {
 
           {/* Footer Sticky Summary & Checkout */}
           {cart.length > 0 && (
-            <div className="px-6 py-5 bg-neutral-50 border-t border-neutral-200 space-y-3">
+            <div className="px-6 py-5 bg-neutral-50 border-t border-neutral-200 space-y-3 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
               <div className="space-y-1.5 text-xs text-neutral-600">
                 <div className="flex justify-between">
                   <span>Subtotal</span>
@@ -287,11 +293,18 @@ export const CartDrawer: React.FC = () => {
               {/* Checkout CTA */}
               <button
                 type="button"
+                disabled={isProceedingToCheckout}
                 onClick={handleCheckout}
-                className="w-full py-3.5 px-6 rounded-full bg-[#104332] text-white font-semibold text-sm hover:bg-[#0a2c20] transition-all flex items-center justify-center gap-2 shadow-sm group active:scale-[0.99]"
+                className="w-full py-3.5 px-6 rounded-full bg-[#104332] text-white font-semibold text-sm hover:bg-[#0a2c20] transition-all flex items-center justify-center gap-2 shadow-sm group active:scale-[0.99] disabled:opacity-75 disabled:cursor-wait"
               >
-                <span>Proceed to Checkout</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                {isProceedingToCheckout ? (
+                  <CircularLoader size="sm" color="white" label="Preparing checkout..." inlineText="Proceeding..." />
+                ) : (
+                  <>
+                    <span>Proceed to Checkout</span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </>
+                )}
               </button>
 
               {/* Secondary Actions */}

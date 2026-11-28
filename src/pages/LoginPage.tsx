@@ -525,13 +525,18 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     disabled={resending || cooldownSeconds > 0}
                     onClick={handleResendOtp}
-                    className="text-title-sm text-primary-container hover:text-tertiary underline-offset-2 hover:underline disabled:opacity-50 disabled:no-underline"
+                    className="text-title-sm text-primary-container hover:text-tertiary underline-offset-2 hover:underline disabled:opacity-50 disabled:no-underline inline-flex items-center gap-1.5"
                   >
-                    {resending
-                      ? 'Sending new code...'
-                      : cooldownSeconds > 0
-                        ? `Resend OTP in ${cooldownSeconds}s`
-                        : 'Resend OTP'}
+                    {resending ? (
+                      <>
+                        <CircularLoader size="xs" color="currentColor" label="Sending new code..." />
+                        <span>Sending new code...</span>
+                      </>
+                    ) : cooldownSeconds > 0 ? (
+                      `Resend OTP in ${cooldownSeconds}s`
+                    ) : (
+                      'Resend OTP'
+                    )}
                   </button>
 
                   <button

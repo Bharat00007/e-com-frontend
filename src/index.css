@@ -93,13 +93,42 @@
 }
 
 @layer base {
-  html,
+  html {
+    margin: 0;
+    padding: 0;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+
   body {
     margin: 0;
     padding: 0;
     font-family: "Plus Jakarta Sans", sans-serif;
     -webkit-font-smoothing: antialiased;
-    overscroll-behavior: none;
+    overflow-x: clip;
+    width: 100%;
+    min-height: 100vh;
+  }
+}
+
+/* Responsive spacing variables for mobile screens (320px–480px) */
+@media (max-width: 640px) {
+  :root {
+    --spacing-gutter: 1rem;
+    --spacing-margin: 1rem;
+  }
+}
+@media (min-width: 641px) and (max-width: 1024px) {
+  :root {
+    --spacing-gutter: 1.25rem;
+    --spacing-margin: 1.5rem;
+  }
+}
+@media (min-width: 1025px) {
+  :root {
+    --spacing-gutter: 1.5rem;
+    --spacing-margin: 2rem;
   }
 }
 

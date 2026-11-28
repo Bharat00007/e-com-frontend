@@ -12,6 +12,15 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
+  }, [mobileMenuOpen]);
+
+  useEffect(() => {
     if (!isSearchOpen && !mobileMenuOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -146,7 +155,7 @@ export const Header: React.FC = () => {
             className="fixed inset-0 bg-black/50 backdrop-blur-xs"
             onClick={() => setMobileMenuOpen(false)}
           />
-          <div className="relative w-72 max-w-[85vw] bg-[#104332] text-white h-full p-6 flex flex-col justify-between shadow-2xl">
+          <div className="relative w-72 max-w-[85vw] bg-[#104332] text-white h-full p-6 pt-[calc(1.5rem+env(safe-area-inset-top,0px))] pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] flex flex-col justify-between shadow-2xl">
             <div>
               <div className="flex items-center justify-between pb-6 border-b border-white/15">
                 <img src={STITCH_LOGO_URL} alt="The Sniff Co." className="h-8 w-auto" />
