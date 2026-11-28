@@ -568,12 +568,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Background auto-reconnect polling when offline
     useEffect(() => {
         if (apiStatus !== 'offline') return;
-        const healthUrl = API_BASE_URL.replace(/\/api\/v1\/?$/, '/health');
+        const healthUrl = `${API_BASE_URL.replace(/\/+$/, '')}/health`;
         const timer = setInterval(async () => {
             try {
-                const res = await fetch(healthUrl).catch(() => null);
+                const res = await fetch(healthUrl, { credentials: 'include' }).catch(() => null);
                 if (res && res.ok) {
-                    void Promise.all([loadProducts(), refreshCart()]);
+                    const body = (await res.json().catch(() => null)) as { ready?: boolean; success?: boolean } | null;
+                    if (body?.success && body?.ready !== false) {
+                        void Promise.all([loadProducts(), refreshCart()]);
+                    }
                 }
             } catch {
                 // Next interval
