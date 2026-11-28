@@ -224,62 +224,84 @@ export const HomePage: React.FC = () => {
             <section className="py-16 md:py-20 bg-white" data-purpose="shop-by-pet">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <h2 className="font-heading-syne text-2xl sm:text-3xl font-bold mb-8">Shop by pet</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                         {/* For Cats */}
-                        <div className="border border-neutral-200 rounded-3xl p-5 sm:p-8 hover:border-neutral-400 transition-all flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#FCFCFB]">
-                            <div className="max-w-[240px]">
-                                <h3 className="font-heading-syne text-xl sm:text-2xl font-bold mb-1 sm:mb-2">For cats</h3>
-                                <p className="text-neutral-500 text-xs sm:text-sm mb-4 sm:mb-6">Litter, shampoo, dry shampoo</p>
-                                <Link
-                                    className="inline-flex items-center text-xs sm:text-sm font-bold text-neutral-900 group"
-                                    to="/shop?category=cats"
-                                >
+                        <Link
+                            to="/shop?category=cats"
+                            aria-label="Shop products for cats: Litter, shampoo, dry shampoo"
+                            className="border border-neutral-200 rounded-3xl p-6 sm:p-8 hover:border-neutral-400 hover:shadow-md active:scale-[0.99] active:bg-neutral-50 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-5 sm:gap-6 bg-[#FCFCFB] group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#104332] focus-visible:ring-offset-2 w-full text-center sm:text-left"
+                        >
+                            <div className="order-2 sm:order-1 flex flex-col items-center sm:items-start w-full sm:max-w-[240px]">
+                                <h3 className="font-heading-syne text-xl sm:text-2xl font-bold mb-1 sm:mb-2 text-neutral-900 group-hover:text-[#104332] transition-colors">
+                                    For cats
+                                </h3>
+                                <p className="text-neutral-500 text-xs sm:text-sm mb-3 sm:mb-6">
+                                    Litter, shampoo, dry shampoo
+                                </p>
+                                <span className="inline-flex items-center text-xs sm:text-sm font-bold text-neutral-900 group-hover:text-[#104332] transition-colors">
                                     Shop cats{' '}
-                                    <span className="ml-1 transition-transform group-hover:translate-x-1">→</span>
-                                </Link>
+                                    <span className="ml-1 transition-transform duration-200 group-hover:translate-x-1">
+                                        →
+                                    </span>
+                                </span>
                             </div>
-                            <div className="w-24 sm:w-36 self-end sm:self-auto bg-[#eef7f2] p-2 sm:p-2.5 rounded-2xl border border-[#d2eadb] shadow-sm flex flex-col items-center shrink-0">
-                                <span className="text-[8px] font-bold text-[#104332] uppercase">Cat Litter</span>
+                            <div className="order-1 sm:order-2 w-28 sm:w-36 bg-[#eef7f2] p-2.5 sm:p-3 rounded-2xl border border-[#d2eadb] shadow-sm flex flex-col items-center shrink-0 group-hover:border-[#b8e2cb] transition-colors">
+                                <span className="text-[8px] sm:text-[9px] font-bold text-[#104332] uppercase tracking-wider">
+                                    Cat Litter
+                                </span>
                                 <img
                                     alt="Cat Litter bag"
-                                    className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-full my-1 sm:my-1.5 border border-white"
+                                    className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full my-1.5 border border-white group-hover:scale-105 transition-transform duration-200"
                                     decoding="async"
                                     height={80}
                                     loading="lazy"
                                     src={CAT_CARD_IMG}
                                     width={80}
                                 />
-                                <span className="text-[8px] text-neutral-500 font-medium">Bentonite 5kg</span>
+                                <span className="text-[8px] sm:text-[9px] text-neutral-500 font-medium">
+                                    Bentonite 5kg
+                                </span>
                             </div>
-                        </div>
+                        </Link>
 
                         {/* For Dogs */}
-                        <div className="border border-neutral-200 rounded-3xl p-5 sm:p-8 hover:border-neutral-400 transition-all flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-4 bg-[#FCFCFB]">
-                            <div className="max-w-[240px]">
-                                <h3 className="font-heading-syne text-xl sm:text-2xl font-bold mb-1 sm:mb-2">For dogs</h3>
-                                <p className="text-neutral-500 text-xs sm:text-sm mb-4 sm:mb-6">Shampoo, 3-in-1, dry shampoo</p>
-                                <Link
-                                    className="inline-flex items-center text-xs sm:text-sm font-bold text-neutral-900 group"
-                                    to="/shop?category=dogs"
-                                >
+                        <Link
+                            to="/shop?category=dogs"
+                            aria-label="Shop products for dogs: Shampoo, 3-in-1, dry shampoo"
+                            className="border border-neutral-200 rounded-3xl p-6 sm:p-8 hover:border-neutral-400 hover:shadow-md active:scale-[0.99] active:bg-neutral-50 transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-5 sm:gap-6 bg-[#FCFCFB] group cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[#104332] focus-visible:ring-offset-2 w-full text-center sm:text-left"
+                        >
+                            <div className="order-2 sm:order-1 flex flex-col items-center sm:items-start w-full sm:max-w-[240px]">
+                                <h3 className="font-heading-syne text-xl sm:text-2xl font-bold mb-1 sm:mb-2 text-neutral-900 group-hover:text-[#104332] transition-colors">
+                                    For dogs
+                                </h3>
+                                <p className="text-neutral-500 text-xs sm:text-sm mb-3 sm:mb-6">
+                                    Shampoo, 3-in-1, dry shampoo
+                                </p>
+                                <span className="inline-flex items-center text-xs sm:text-sm font-bold text-neutral-900 group-hover:text-[#104332] transition-colors">
                                     Shop dogs{' '}
-                                    <span className="ml-1 transition-transform group-hover:translate-x-1">→</span>
-                                </Link>
+                                    <span className="ml-1 transition-transform duration-200 group-hover:translate-x-1">
+                                        →
+                                    </span>
+                                </span>
                             </div>
-                            <div className="w-24 sm:w-36 self-end sm:self-auto bg-[#f7f4ef] p-2 sm:p-2.5 rounded-2xl border border-[#ece4d3] shadow-sm flex flex-col items-center shrink-0">
-                                <span className="text-[8px] font-bold text-amber-900 uppercase">Dog Care</span>
+                            <div className="order-1 sm:order-2 w-28 sm:w-36 bg-[#f7f4ef] p-2.5 sm:p-3 rounded-2xl border border-[#ece4d3] shadow-sm flex flex-col items-center shrink-0 group-hover:border-[#e2d5bd] transition-colors">
+                                <span className="text-[8px] sm:text-[9px] font-bold text-amber-900 uppercase tracking-wider">
+                                    Dog Care
+                                </span>
                                 <img
                                     alt="Dog Shampoo bottle"
-                                    className="w-14 h-14 sm:w-20 sm:h-20 object-cover rounded-full my-1 sm:my-1.5 border border-white"
+                                    className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-full my-1.5 border border-white group-hover:scale-105 transition-transform duration-200"
                                     decoding="async"
                                     height={80}
                                     loading="lazy"
                                     src={DOG_CARD_IMG}
                                     width={80}
                                 />
-                                <span className="text-[8px] text-neutral-500 font-medium">Shampoo 200ml</span>
+                                <span className="text-[8px] sm:text-[9px] text-neutral-500 font-medium">
+                                    Shampoo 200ml
+                                </span>
                             </div>
-                        </div>
+                        </Link>
                     </div>
                 </div>
             </section>
